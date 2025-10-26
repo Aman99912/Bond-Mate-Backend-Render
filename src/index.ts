@@ -17,11 +17,8 @@ const server = createServer(app);
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
-  origin: true, // Allow all origins for development
-  credentials: true,
-}));
+// CORS configuration - Open for everyone
+app.use(cors());
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
