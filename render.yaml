@@ -9,7 +9,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        value: mongodb+srv://amansaroha110:aman123@%23@relationstatus.avjo6eq.mongodb.net/bond_mate_db?retryWrites=true&w=majority
+        value: mongodb+srv://amansaroha110:aman123@relationstatus.avjo6eq.mongodb.net/bond_mate_db?retryWrites=true&w=majority
       - key: JWT_SECRET
-        value: your-super-secret-jwt-key-here-bond-mate-2024
+        value: l u4wyteiu4l*&dfsdfsdfsadfryhdfwertv5etr@G@Y@#HEVQEKKQWHQWehq
 
