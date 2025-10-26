@@ -3,8 +3,8 @@ services:
     name: bond-mate-backend
     env: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm run render-postbuild
+    buildCommand: npm install && npm run build
+    startCommand: node -r tsconfig-paths/register dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
