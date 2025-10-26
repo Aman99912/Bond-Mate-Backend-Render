@@ -1,0 +1,52 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "moduleResolution": "node",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["./src/*", "./dist/*"],
+      "@/config/*": ["./src/config/*", "./dist/config/*"],
+      "@/controllers/*": ["./src/controllers/*", "./dist/controllers/*"],
+      "@/middleware/*": ["./src/middleware/*", "./dist/middleware/*"],
+      "@/routes/*": ["./src/routes/*", "./dist/routes/*"],
+      "@/services/*": ["./src/services/*", "./dist/services/*"],
+      "@/utils/*": ["./src/utils/*", "./dist/utils/*"],
+      "@/types/*": ["./src/types/*", "./dist/types/*"]
+    },
+    "typeRoots": [
+      "./src/types",
+      "./node_modules/@types"
+    ],
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}
