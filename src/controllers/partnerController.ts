@@ -216,17 +216,25 @@ export const sendPartnerRequest = asyncHandler(async (req: Request, res: Respons
     throw new AppError('This user already has a partner', 400);
   }
 
-  // Check if there's already a pending request between these users
-  const existingRequest = await PartnerRequest.findOne({
+  // Check for ANY existing requests between these users (pending, accepted, or rejected)
+  // This prevents bugs where old 'accepted' requests cause state confusion after unfriend
+  const existingRequests = await PartnerRequest.find({
     $or: [
       { fromUserId, toUserId },
       { fromUserId: toUserId, toUserId: fromUserId }
-    ],
-    status: 'pending'
+    ]
   });
 
-  if (existingRequest) {
-    throw new AppError('A request already exists between these users', 400);
+  // If there are old accepted or rejected requests, delete them to start fresh
+  if (existingRequests.length > 0) {
+    console.log(`Found ${existingRequests.length} old request(s) between users. Cleaning up...`);
+    await PartnerRequest.deleteMany({
+      $or: [
+        { fromUserId, toUserId },
+        { fromUserId: toUserId, toUserId: fromUserId }
+      ]
+    });
+    console.log('Old requests cleaned up');
   }
 
   // Create partner request
@@ -529,6 +537,7 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
     // Emit socket event
     const socketHandler = getSocketHandler();
     if (socketHandler) {
+      // Notify sender about acceptance
       socketHandler.emitToUser(pendingRequest.fromUserId, 'partner_request_accepted', {
         requestId: requestId,
         fromUserId: pendingRequest.fromUserId,
@@ -538,6 +547,23 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
         status: 'accepted',
         message: `${toUser?.name || 'Someone'} accepted your partner request`
       });
+      
+      // Also emit partner_added event to trigger UI refresh on homepage
+      socketHandler.emitToUser(pendingRequest.fromUserId, 'partner_added', {
+        userId: userId,
+        partnerName: toUser?.name,
+        partnerAvatar: toUser?.avatar,
+        timestamp: startedAt
+      });
+      
+      socketHandler.emitToUser(userId, 'partner_added', {
+        userId: pendingRequest.fromUserId,
+        partnerName: fromUserDetails?.name,
+        partnerAvatar: fromUserDetails?.avatar,
+        timestamp: startedAt
+      });
+      
+      console.log('Socket events emitted for partner acceptance');
     }
     
     return res.json({
@@ -749,7 +775,22 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
         message: `${toUserDetails?.name || 'Someone'} accepted your partner request`
       });
       
-      console.log('Socket notification sent for accepted request to user:', request.fromUserId);
+      // Also emit partner_added event to trigger UI refresh on homepage
+      socketHandler.emitToUser(request.fromUserId, 'partner_added', {
+        userId: request.toUserId,
+        partnerName: toUserDetails?.name,
+        partnerAvatar: toUserDetails?.avatar,
+        timestamp: startedAt
+      });
+      
+      socketHandler.emitToUser(request.toUserId, 'partner_added', {
+        userId: request.fromUserId,
+        partnerName: fromUser?.name,
+        partnerAvatar: fromUser?.avatar,
+        timestamp: startedAt
+      });
+      
+      console.log('Socket notifications sent to both users for partner acceptance');
     }
 
     return res.json({
@@ -1161,10 +1202,12 @@ export const removePartner = asyncHandler(async (req: Request, res: Response) =>
       breakupRequestId
     );
 
-    // Emit socket event
+    // Emit socket event to both users
     const socketHandler = getSocketHandler();
     if (socketHandler) {
       const requestId = (breakupRequest._id as any).toString();
+      
+      // Notify the partner about the breakup request
       socketHandler.emitToUser(partnerId, 'breakup_request_received', {
         requestId: requestId,
         fromUserId: userId,
@@ -1179,6 +1222,19 @@ export const removePartner = asyncHandler(async (req: Request, res: Response) =>
         }
       });
       console.log('Socket notification sent to user:', partnerId);
+      
+      // Also emit partner_removed event to trigger UI refresh
+      socketHandler.emitToUser(partnerId, 'partner_removed', {
+        userId: userId!,
+        partnerName: currentUser.name,
+        timestamp: endedAt
+      });
+      
+      socketHandler.emitToUser(userId!, 'partner_removed', {
+        userId: partnerId,
+        partnerName: partnerUser.name,
+        timestamp: endedAt
+      });
     }
 
     res.json({
@@ -1297,6 +1353,16 @@ export const acceptBreakup = asyncHandler(async (req: Request, res: Response) =>
       );
     }
 
+    // 🔥 CRITICAL FIX: Clear all old PartnerRequest documents between these users
+    // This prevents the bug where old 'accepted' requests cause state confusion
+    await PartnerRequest.deleteMany({
+      $or: [
+        { fromUserId: userId, toUserId: partnerId },
+        { fromUserId: partnerId, toUserId: userId }
+      ]
+    });
+    console.log('✅ Cleared old PartnerRequest documents after breakup');
+
     console.log('Backend: Updated both users with inactive status');
 
     // Update breakup request status
@@ -1344,6 +1410,20 @@ export const acceptBreakup = asyncHandler(async (req: Request, res: Response) =>
         acceptedBy: currentUser.name,
         message: 'Your relationship has been ended successfully'
       });
+      
+      // Emit partner_removed event to trigger UI refresh on homepage
+      socketHandler.emitToUser(partnerId, 'partner_removed', {
+        userId: userId!,
+        partnerName: currentUser.name,
+        timestamp: endedAt
+      });
+      
+      socketHandler.emitToUser(userId!, 'partner_removed', {
+        userId: partnerId,
+        partnerName: partnerUser.name,
+        timestamp: endedAt
+      });
+      
       console.log('Socket notifications sent to both users');
     }
 

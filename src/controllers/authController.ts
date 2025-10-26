@@ -295,6 +295,194 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   res.json(response);
 });
 
+export const updateEmailWithOTP = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
+  const { newEmail, currentOtp, newOtp } = req.body;
+
+  if (!userId) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  if (!newEmail || !currentOtp || !newOtp) {
+    throw new AppError('All fields are required', 400);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+
+  // Import OTP model
+  const OTP = require('@/models/OTP').default;
+
+  // Verify current email OTP
+  const currentEmailRecord = await OTP.findOne({
+    email: user.email,
+    otp: currentOtp,
+    isUsed: false,
+    expiresAt: { $gt: new Date() },
+    type: 'email',
+    purpose: 'change_email'
+  });
+
+  if (!currentEmailRecord) {
+    throw new AppError('Invalid or expired current email OTP', 400);
+  }
+
+  // Verify new email OTP
+  const newEmailRecord = await OTP.findOne({
+    email: newEmail,
+    otp: newOtp,
+    isUsed: false,
+    expiresAt: { $gt: new Date() },
+    type: 'email',
+    purpose: 'change_email'
+  });
+
+  if (!newEmailRecord) {
+    throw new AppError('Invalid or expired new email OTP', 400);
+  }
+
+  // Mark OTPs as used
+  currentEmailRecord.isUsed = true;
+  newEmailRecord.isUsed = true;
+  await currentEmailRecord.save();
+  await newEmailRecord.save();
+
+  // Update user email
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { email: newEmail },
+    { new: true, runValidators: true }
+  ).select('-password -subPassword');
+
+  // Notify partner if exists
+  if (user.currentPartner?.partnerId) {
+    const notificationService = require('@/services/notificationService').default;
+    
+    await notificationService.createNotification({
+      userId: user.currentPartner.partnerId,
+      type: 'message' as any,
+      title: 'Profile Updated',
+      message: `${user.name} has updated their email address`,
+      data: { userId: user.id, field: 'email', newValue: newEmail }
+    });
+
+    // Send push notification
+    const partner = await User.findById(user.currentPartner.partnerId).select('pushToken');
+    if (partner?.pushToken) {
+      await notificationService.sendPushNotification(
+        user.currentPartner.partnerId,
+        'Profile Updated',
+        `${user.name} has updated their email address`,
+        { userId: user.id, field: 'email' }
+      );
+    }
+  }
+
+  const response: ApiResponse = {
+    success: true,
+    message: 'Email updated successfully',
+    data: { user: updatedUser }
+  };
+
+  res.json(response);
+});
+
+export const updatePhoneWithOTP = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.userId;
+  const { newPhone, currentOtp, newOtp } = req.body;
+
+  if (!userId) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  if (!newPhone || !currentOtp || !newOtp) {
+    throw new AppError('All fields are required', 400);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError('User not found', 404);
+  }
+
+  // Import OTP model
+  const OTP = require('@/models/OTP').default;
+
+  // Verify current phone OTP
+  const currentPhoneRecord = await OTP.findOne({
+    mobileNumber: user.mobileNumber,
+    otp: currentOtp,
+    isUsed: false,
+    expiresAt: { $gt: new Date() },
+    type: 'mobile',
+    purpose: 'change_phone'
+  });
+
+  if (!currentPhoneRecord) {
+    throw new AppError('Invalid or expired current phone OTP', 400);
+  }
+
+  // Verify new phone OTP
+  const newPhoneRecord = await OTP.findOne({
+    mobileNumber: newPhone,
+    otp: newOtp,
+    isUsed: false,
+    expiresAt: { $gt: new Date() },
+    type: 'mobile',
+    purpose: 'change_phone'
+  });
+
+  if (!newPhoneRecord) {
+    throw new AppError('Invalid or expired new phone OTP', 400);
+  }
+
+  // Mark OTPs as used
+  currentPhoneRecord.isUsed = true;
+  newPhoneRecord.isUsed = true;
+  await currentPhoneRecord.save();
+  await newPhoneRecord.save();
+
+  // Update user phone
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { mobileNumber: newPhone },
+    { new: true, runValidators: true }
+  ).select('-password -subPassword');
+
+  // Notify partner if exists
+  if (user.currentPartner?.partnerId) {
+    const notificationService = require('@/services/notificationService').default;
+    
+    await notificationService.createNotification({
+      userId: user.currentPartner.partnerId,
+      type: 'message' as any,
+      title: 'Profile Updated',
+      message: `${user.name} has updated their phone number`,
+      data: { userId: user.id, field: 'phone', newValue: newPhone }
+    });
+
+    // Send push notification
+    const partner = await User.findById(user.currentPartner.partnerId).select('pushToken');
+    if (partner?.pushToken) {
+      await notificationService.sendPushNotification(
+        user.currentPartner.partnerId,
+        'Profile Updated',
+        `${user.name} has updated their phone number`,
+        { userId: user.id, field: 'phone' }
+      );
+    }
+  }
+
+  const response: ApiResponse = {
+    success: true,
+    message: 'Phone number updated successfully',
+    data: { user: updatedUser }
+  };
+
+  res.json(response);
+});
+
 export const changePassword = asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
   const { currentPassword, newPassword } = req.body;
