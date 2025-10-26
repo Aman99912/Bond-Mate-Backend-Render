@@ -9,7 +9,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        sync: false
+        value: mongodb+srv://amansaroha110:aman123@%23@relationstatus.avjo6eq.mongodb.net/bond_mate_db?retryWrites=true&w=majority
       - key: JWT_SECRET
-        sync: false
+        value: your-super-secret-jwt-key-here-bond-mate-2024
 
