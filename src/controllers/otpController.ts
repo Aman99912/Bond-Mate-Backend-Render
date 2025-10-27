@@ -14,10 +14,12 @@ const generateOTP = (): string => {
 // Create email transporter for Gmail SMTP
 const createEmailTransporter = () => {
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: false, // true for 465, false for other ports
     auth: {
-      user: process.env.SMTP_EMAIL || 'your-email@gmail.com',
-      pass: process.env.SMTP_PASSWORD || 'your-app-password',
+      user: process.env.SMTP_USER || process.env.SMTP_EMAIL || 'bondmateauth@gmail.com',
+      pass: process.env.SMTP_PASS || process.env.SMTP_PASSWORD || 'your-app-password',
     },
   });
 };
@@ -28,7 +30,7 @@ const sendEmailWithOTP = async (email: string, otp: string) => {
     const transporter = createEmailTransporter();
     
     const mailOptions = {
-      from: process.env.SMTP_EMAIL || 'your-email@gmail.com',
+      from: process.env.SMTP_USER || process.env.SMTP_EMAIL || 'bondmateauth@gmail.com',
       to: email,
       subject: 'Bond Mate - OTP Verification',
       html: `
@@ -46,11 +48,12 @@ const sendEmailWithOTP = async (email: string, otp: string) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`✅ Email OTP sent to ${email}: ${otp}`);
-  } catch (error) {
+    console.log(`📧 Message ID: ${info.messageId}`);
+  } catch (error: any) {
     console.error('❌ Error sending email OTP:', error);
-    // In development, still allow OTP to work even if email fails
+    throw new Error(`Failed to send email: ${error.message}`);
   }
 };
 
@@ -299,7 +302,7 @@ export const sendEmailOTPController = asyncHandler(async (req: Request, res: Res
   sendEmailWithOTP(email, otp).catch(err => {
     console.log('⚠️ Email sending failed (ignored for dev):', err);
   });
-
+  
   console.log(`✅ OTP generated for ${email}: ${otp}`);
 
   const response: ApiResponse = {
@@ -327,22 +330,6 @@ export const verifyEmailOTPController = asyncHandler(async (req: Request, res: R
   const otpRegex = /^\d{4}$/;
   if (!otpRegex.test(otp)) {
     throw new AppError('OTP must be 4 digits', 400);
-  }
-
-  // DUMMY OTP CHECK: Accept 1111 as valid OTP for development
-  if (otp === '1111') {
-    console.log('✅ Dummy OTP 1111 accepted for:', email);
-    const response: ApiResponse = {
-      success: true,
-      message: 'OTP verified successfully',
-      data: {
-        email,
-        verified: true,
-        message: 'Email verified successfully',
-      },
-    };
-    res.status(200).json(response);
-    return;
   }
 
   // Find the OTP record
@@ -416,7 +403,7 @@ export const resendEmailOTPController = asyncHandler(async (req: Request, res: R
   sendEmailWithOTP(email, otp).catch(err => {
     console.log('⚠️ Email sending failed (ignored for dev):', err);
   });
-
+  
   console.log(`✅ OTP regenerated for ${email}: ${otp}`);
 
   const response: ApiResponse = {

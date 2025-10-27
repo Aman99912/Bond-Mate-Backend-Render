@@ -12,4 +12,18 @@ services:
         value: mongodb+srv://amansaroha110:aman123@relationstatus.avjo6eq.mongodb.net/bond_mate_db?retryWrites=true&w=majority
       - key: JWT_SECRET
         value: l u4wyteiu4l*&dfsdfsdfsadfryhdfwertv5etr@G@Y@#HEVQEKKQWHQWehq
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: bondmateauth@gmail.com
+      - key: SMTP_PASS
+        value: napv uiqx clgd wlzv
+      - key: SMS_USER
+        value: success
+      - key: SMS_PASS
+        value: bulk@1234
+      - key: SMS_SENDER
+        value: BHAINF
 

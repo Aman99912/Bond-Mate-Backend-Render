@@ -68,11 +68,17 @@ export class SessionService {
     newDeviceInfo: DeviceInfo,
     forceLogout: boolean = false
   ) {
+    // Find user
     const user = await User.findById(userId);
     
     if (!user) {
       throw new Error('User not found');
     }
+    
+    // Log full user object to debug
+    console.log('User from DB:', user.toObject());
+    console.log('User createdAt:', user.createdAt);
+    console.log('User dob:', user.dob);
 
     // If force logout is true, update the old session's logout time
     if (forceLogout && user.currentDeviceId) {
@@ -119,6 +125,25 @@ export class SessionService {
       updatedAt: new Date(),
     });
 
+    // Get createdAt - fallback to updatedAt if createdAt doesn't exist (for older users)
+    const createdAt = user.createdAt || user.updatedAt || new Date();
+
+    // Log the user object to verify what fields are available
+    console.log('User from database:', {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobileNumber: user.mobileNumber,
+      avatar: user.avatar,
+      bio: user.bio,
+      dob: user.dob,
+      gender: user.gender,
+      UserSearchId: user.UserSearchId,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      finalCreatedAt: createdAt,
+    });
+
     return {
       token,
       user: {
@@ -131,7 +156,7 @@ export class SessionService {
         dob: user.dob,
         gender: user.gender,
         UserSearchId: user.UserSearchId,
-        createdAt: user.createdAt,
+        createdAt: createdAt,
       }
     };
   }

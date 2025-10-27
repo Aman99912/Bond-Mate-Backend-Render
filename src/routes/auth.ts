@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, forceLogin, getProfile, updateProfile, updateEmailWithOTP, updatePhoneWithOTP, changePassword, changeSubPassword, verifySecretCode, checkActiveSession, deleteAccount, refreshToken, logout, logoutFromAllDevices } from '@/controllers/authController';
+import { register, login, forceLogin, getProfile, updateProfile, updateEmailWithOTP, updatePhoneWithOTP, changePassword, changeSubPassword, resetPasswordWithOTP, resetSubPasswordWithOTP, verifySecretCode, checkActiveSession, deleteAccount, refreshToken, logout, logoutFromAllDevices } from '@/controllers/authController';
 import { validateRegister, validateLogin } from '@/middleware/validation';
 import { authenticate } from '@/middleware/auth';
 
@@ -12,6 +12,8 @@ router.post('/force-login', validateLogin, forceLogin);
 router.post('/refresh', refreshToken);
 router.post('/verify-secret-code', verifySecretCode);
 router.post('/check-active-session', checkActiveSession);
+router.post('/reset-password', resetPasswordWithOTP);
+router.post('/reset-sub-password', resetSubPasswordWithOTP);
 
 // Protected routes (require authentication)
 router.get('/profile', authenticate, getProfile);
