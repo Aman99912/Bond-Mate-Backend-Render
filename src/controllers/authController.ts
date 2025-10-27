@@ -166,6 +166,11 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     forceLogout || sessionConflict.hasConflict
   );
 
+  // Log the response to verify data
+  console.log('Login response user:', loginResult.user);
+  console.log('Login response user.createdAt:', loginResult.user.createdAt);
+  console.log('Login response user.dob:', loginResult.user.dob);
+
   const response: ApiResponse = {
     success: true,
     message: 'Login successful',
@@ -545,6 +550,108 @@ export const changeSubPassword = asyncHandler(async (req: Request, res: Response
   res.json(response);
 });
 
+// Reset password using OTP (for forgot password)
+export const resetPasswordWithOTP = asyncHandler(async (req: Request, res: Response) => {
+  const { mobileNumber, otp, newPassword } = req.body;
+
+  if (!mobileNumber || !otp || !newPassword) {
+    throw new AppError('Mobile number, OTP, and new password are required', 400);
+  }
+
+  // Validate new password
+  if (newPassword.length < 6) {
+    throw new AppError('Password must be at least 6 characters long', 400);
+  }
+
+  // Find user by mobile number
+  const user = await User.findOne({ mobileNumber });
+  if (!user) {
+    throw new AppError('User not found with this mobile number', 404);
+  }
+
+  // Verify OTP
+  const OTP = require('@/models/OTP').default;
+  const otpRecord = await OTP.findOne({
+    mobileNumber,
+    otp,
+    isUsed: false,
+    expiresAt: { $gt: new Date() },
+    purpose: 'password_reset',
+    type: 'mobile',
+  });
+
+  if (!otpRecord) {
+    throw new AppError('Invalid or expired OTP', 400);
+  }
+
+  // Mark OTP as used
+  otpRecord.isUsed = true;
+  await otpRecord.save();
+
+  // Hash and update password
+  const hashedNewPassword = await hashPassword(newPassword);
+  user.password = hashedNewPassword;
+  await user.save();
+
+  const response: ApiResponse = {
+    success: true,
+    message: 'Password reset successfully',
+  };
+
+  res.json(response);
+});
+
+// Reset sub-password using OTP (for forgot sub password)
+export const resetSubPasswordWithOTP = asyncHandler(async (req: Request, res: Response) => {
+  const { mobileNumber, otp, newSubPassword } = req.body;
+
+  if (!mobileNumber || !otp || !newSubPassword) {
+    throw new AppError('Mobile number, OTP, and new sub-password are required', 400);
+  }
+
+  // Validate new sub-password
+  if (newSubPassword.length < 4) {
+    throw new AppError('Sub-password must be at least 4 characters long', 400);
+  }
+
+  // Find user by mobile number
+  const user = await User.findOne({ mobileNumber });
+  if (!user) {
+    throw new AppError('User not found with this mobile number', 404);
+  }
+
+  // Verify OTP
+  const OTP = require('@/models/OTP').default;
+  const otpRecord = await OTP.findOne({
+    mobileNumber,
+    otp,
+    isUsed: false,
+    expiresAt: { $gt: new Date() },
+    purpose: 'password_reset',
+    type: 'mobile',
+  });
+
+  if (!otpRecord) {
+    throw new AppError('Invalid or expired OTP', 400);
+  }
+
+  // Mark OTP as used
+  otpRecord.isUsed = true;
+  await otpRecord.save();
+
+  // Hash and update sub-password
+  const hashedNewSubPassword = await hashPassword(newSubPassword);
+  user.subPassword = hashedNewSubPassword;
+  await user.save();
+
+  const response: ApiResponse = {
+    success: true,
+    message: 'Sub-password reset successfully',
+  };
+
+  res.json(response);
+});
+
 export const deleteAccount = asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user?.userId;
 
@@ -671,6 +778,19 @@ export const verifySecretCode = asyncHandler(async (req: Request, res: Response)
     throw new AppError('Invalid secret code', 401);
   }
 
+  // Get createdAt - fallback to updatedAt if createdAt doesn't exist (for older users)
+  const createdAt = user.createdAt || user.updatedAt || new Date();
+
+  // Log user data for debugging
+  console.log('verifySecretCode - User data:', {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    finalCreatedAt: createdAt,
+  });
+
   const response: ApiResponse = {
     success: true,
     message: 'Secret code verified successfully',
@@ -686,6 +806,7 @@ export const verifySecretCode = asyncHandler(async (req: Request, res: Response)
         dob: user.dob,
         gender: user.gender,
         UserSearchId: user.UserSearchId,
+        createdAt: createdAt,
       }
     }
   };
