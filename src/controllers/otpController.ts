@@ -4,6 +4,7 @@ import { ApiResponse, SendOTPRequest, VerifyOTPRequest, ResendOTPRequest } from 
 import OTP from '@/models/OTP';
 import User from '@/models/User';
 import nodemailer from 'nodemailer';
+import axios from 'axios';
 
 // Generate 4-digit OTP
 const generateOTP = (): string => {
@@ -53,10 +54,36 @@ const sendEmailWithOTP = async (email: string, otp: string) => {
   }
 };
 
-// Send SMS OTP (placeholder for future SMS integration)
+// Send SMS OTP using bhashsms.com
 const sendSMSOTP = async (mobileNumber: string, otp: string) => {
-  // TODO: Integrate with SMS service like Twilio
-  console.log(`📱 SMS OTP for ${mobileNumber}: ${otp}`);
+  try {
+    const smsUser = process.env.SMS_USER || 'success';
+    const smsPass = process.env.SMS_PASS || 'bulk@1234';
+    const smsSender = process.env.SMS_SENDER || 'BHAINF';
+    
+    // Construct the SMS message
+    const message = `Your Bond Mate OTP is ${otp}. This will expire in 5 minutes.`;
+    
+    // Build the API URL
+    const apiUrl = `https://bhashsms.com/api/sendmsg.php?user=${smsUser}&pass=${smsPass}&sender=${smsSender}&phone=${mobileNumber}&text=${encodeURIComponent(message)}&priority=ndnd&stype=normal`;
+    
+    // Send the SMS using axios
+    const response = await axios.get(apiUrl);
+    
+    console.log(`📱 SMS sent to ${mobileNumber}: ${response.data}`);
+    
+    if (response.status === 200 && response.data) {
+      console.log(`✅ OTP ${otp} sent successfully to ${mobileNumber}`);
+      return response.data;
+    } else {
+      throw new Error(`SMS sending failed: ${response.data}`);
+    }
+  } catch (error: any) {
+    console.error('❌ Error sending SMS OTP:', error.message);
+    // Don't throw - let it fail silently to not block the flow
+    // The OTP is already stored in database, so verification will still work
+    throw error;
+  }
 };
 
 // ============================
