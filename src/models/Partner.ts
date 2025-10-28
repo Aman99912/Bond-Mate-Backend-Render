@@ -207,32 +207,36 @@ PartnerHistorySchema.index({ action: 1 });
 
 // Ensure only one active relationship per user
 PartnerSchema.pre('save', async function(next) {
-  if (this.isNew && this.status === 'active') {
-    // Check if user1 already has an active relationship
-    const existingPartner1 = await Partner.findOne({
-      $or: [
-        { user1Id: this.user1Id, status: 'active' },
-        { user2Id: this.user1Id, status: 'active' }
-      ]
-    });
+  try {
+    if (this.isNew && this.status === 'active') {
+      // Only validate if this is a new document with active status
+      const existingPartner1 = await this.model('Partner').findOne({
+        $or: [
+          { user1Id: this.user1Id, status: 'active' },
+          { user2Id: this.user1Id, status: 'active' }
+        ]
+      }).exec();
 
-    if (existingPartner1) {
-      return next(new Error('User already has an active relationship'));
+      if (existingPartner1) {
+        return next(new Error('User already has an active relationship'));
+      }
+
+      const existingPartner2 = await this.model('Partner').findOne({
+        $or: [
+          { user1Id: this.user2Id, status: 'active' },
+          { user2Id: this.user2Id, status: 'active' }
+        ]
+      }).exec();
+
+      if (existingPartner2) {
+        return next(new Error('Partner already has an active relationship'));
+      }
     }
-
-    // Check if user2 already has an active relationship
-    const existingPartner2 = await Partner.findOne({
-      $or: [
-        { user1Id: this.user2Id, status: 'active' },
-        { user2Id: this.user2Id, status: 'active' }
-      ]
-    });
-
-    if (existingPartner2) {
-      return next(new Error('Partner already has an active relationship'));
-    }
+    next();
+  } catch (error) {
+    console.error('Error in Partner pre-save hook:', error);
+    next(error instanceof Error ? error : new Error('Unknown error in Partner pre-save hook'));
   }
-  next();
 });
 
 export const Partner = mongoose.model<IPartner>('Partner', PartnerSchema);

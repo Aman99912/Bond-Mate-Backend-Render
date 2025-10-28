@@ -53,16 +53,19 @@ class NotificationService {
   // Send push notification via Expo
   public async sendPushNotification(userId: string, title: string, body: string, data?: any) {
     try {
-      // Get user's push token
-      const user = await User.findById(userId).select('pushToken');
+      // Get user's push token from currentDeviceInfo (FCM token)
+      const user = await User.findById(userId).select('pushToken currentDeviceInfo');
       
-      if (!user || !user.pushToken) {
-        console.log(`No push token found for user ${userId}`);
+      // Try to get token from currentDeviceInfo first (from login), then fallback to pushToken
+      const fcmToken = user?.currentDeviceInfo?.fcmToken || user?.pushToken;
+      
+      if (!fcmToken) {
+        console.log(`No push/FCM token found for user ${userId}`);
         return false;
       }
 
       const message = {
-        to: user.pushToken,
+        to: fcmToken,
         sound: 'default',
         title: title,
         body: body,
@@ -82,10 +85,10 @@ class NotificationService {
         },
       });
 
-      console.log('Push notification sent:', response.data);
+      console.log('✅ Push notification sent:', response.data);
       return true;
     } catch (error) {
-      console.error('Error sending push notification:', error);
+      console.error('❌ Error sending push notification:', error);
       return false;
     }
   }
