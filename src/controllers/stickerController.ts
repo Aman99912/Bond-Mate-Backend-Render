@@ -4,6 +4,7 @@ import Sticker from '@/models/Sticker';
 import Message from '@/models/Message';
 import Chat from '@/models/Chat';
 import Notification from '@/models/Notification';
+import { getSocketHandler } from '@/socket/socketHandler';
 
 // Get all stickers by category
 export const getStickers = asyncHandler(async (req: Request, res: Response) => {
@@ -86,6 +87,33 @@ export const sendSticker = asyncHandler(async (req: Request, res: Response) => {
     message: `Sent a ${sticker.category} sticker`,
     data: { chatId, messageId: message._id, stickerId: sticker.stickerId }
   });
+
+  // Emit socket event to chat participants
+  const socketHandler = getSocketHandler();
+  console.log('🔌 Socket handler available for sticker:', !!socketHandler);
+  
+  if (socketHandler) {
+    console.log('📡 Broadcasting sticker via socket to chat:', chatId);
+    socketHandler.sendMessageToChat(chatId, {
+      chatId,
+      message: {
+        _id: message._id,
+        content: message.content,
+        senderId: message.senderId,
+        createdAt: message.createdAt,
+        type: message.type,
+        stickerId: message.stickerId,
+        stickerUrl: message.stickerUrl,
+        stickerCategory: message.stickerCategory,
+        isOneView: message.isOneView,
+        fileUrl: message.fileUrl,
+        thumbnailUrl: message.thumbnailUrl
+      }
+    });
+    console.log('✅ Sticker broadcast completed');
+  } else {
+    console.log('❌ Socket handler not available - sticker sent via API only');
+  }
 
   res.json({
     success: true,

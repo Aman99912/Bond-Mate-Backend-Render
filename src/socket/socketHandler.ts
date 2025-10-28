@@ -7,6 +7,7 @@ import Message from '@/models/Message';
 import Notification from '@/models/Notification';
 import { IUser } from '@/models/User';
 import { config } from '@/config/env';
+import logger from '@/utils/logger';
 
 interface JwtPayload {
   userId: string;
@@ -40,24 +41,24 @@ export class SocketHandler {
     // Authentication middleware
     this.io.use(async (socket: Socket, next) => {
       try {
-        console.log('🔐 Socket authentication attempt...');
+        logger.debug('🔐 Socket authentication attempt...');
         
         const token = (socket.handshake.auth as any)?.token || 
                      socket.handshake.headers.authorization?.split(' ')[1];
         
-        console.log('🔑 Token found:', !!token);
-        console.log('🔑 Token length:', token?.length || 0);
+        logger.debug('🔑 Token found:', !!token);
+        logger.debug('🔑 Token length:', token?.length || 0);
         
         if (!token) {
           console.log('❌ No token provided');
           return next(new Error('Authentication error: No token provided'));
         }
 
-        console.log('🔍 Verifying token...');
+        logger.debug('🔍 Verifying token...');
         const decoded = jwt.verify(token, config.jwt.secret) as JwtPayload;
-        console.log('✅ Token decoded successfully:', { userId: decoded.userId, email: decoded.email });
+        logger.debug('✅ Token decoded successfully:', { userId: decoded.userId, email: decoded.email });
         
-        console.log('👤 Looking up user:', decoded.userId);
+        logger.debug('👤 Looking up user:', decoded.userId);
         const user = await User.findById(decoded.userId).select('-password');
         
         if (!user) {
@@ -65,11 +66,11 @@ export class SocketHandler {
           return next(new Error('Authentication error: User not found'));
         }
 
-        console.log('✅ User found:', user.name, user.email);
+        logger.debug('✅ User found:', user.name, user.email);
         (socket as AuthenticatedSocket).user = user;
         next();
       } catch (error) {
-        console.error('❌ Socket authentication error:', error);
+        logger.error('❌ Socket authentication error:', error);
         if (error instanceof jwt.TokenExpiredError) {
           next(new Error('Authentication error: Token expired'));
         } else if (error instanceof jwt.JsonWebTokenError) {
@@ -84,7 +85,7 @@ export class SocketHandler {
   private setupEventHandlers() {
     this.io.on('connection', (socket: Socket) => {
       const authSocket = socket as AuthenticatedSocket;
-      console.log(`User ${authSocket.user?.name} connected: ${socket.id}`);
+      logger.debug(`User ${authSocket.user?.name} connected: ${socket.id}`);
 
       // Store user connection
       if (authSocket.user) {
@@ -97,31 +98,31 @@ export class SocketHandler {
       // Join user to their personal room
       if (authSocket.user) {
         socket.join(`user_${authSocket.user._id}`);
-        console.log(`User ${authSocket.user.name} joined personal room: user_${authSocket.user._id}`);
+        logger.debug(`User ${authSocket.user.name} joined personal room: user_${authSocket.user._id}`);
       }
 
       // Handle joining chat room
       socket.on('join_room', (roomName: string) => {
         socket.join(roomName);
-        console.log(`User ${authSocket.user?.name} joined room ${roomName}`);
+        logger.debug(`User ${authSocket.user?.name} joined room ${roomName}`);
       });
 
       // Handle joining chat room (specific for chat)
       socket.on('join_chat', (chatId: string) => {
         socket.join(`chat_${chatId}`);
-        console.log(`User ${authSocket.user?.name} joined chat room: chat_${chatId}`);
+        logger.debug(`User ${authSocket.user?.name} joined chat room: chat_${chatId}`);
       });
 
       // Handle leaving chat room
       socket.on('leave_room', (roomName: string) => {
         socket.leave(roomName);
-        console.log(`User ${authSocket.user?.name} left room ${roomName}`);
+        logger.debug(`User ${authSocket.user?.name} left room ${roomName}`);
       });
 
       // Handle leaving chat room (specific for chat)
       socket.on('leave_chat', (chatId: string) => {
         socket.leave(`chat_${chatId}`);
-        console.log(`User ${authSocket.user?.name} left chat room: chat_${chatId}`);
+        logger.debug(`User ${authSocket.user?.name} left chat room: chat_${chatId}`);
       });
 
       // Handle sending message
@@ -347,6 +348,38 @@ export class SocketHandler {
           userId: data.userId,
           userName: authSocket.user?.name
         });
+      });
+
+      // Handle reactions via socket (optional client emit)
+      socket.on('message_reaction_update', async (data: { chatId: string; messageId: string; emoji: string }) => {
+        try {
+          if (!authSocket.user) return;
+          const { chatId, messageId, emoji } = data;
+          const chat = await Chat.findById(chatId);
+          if (!chat || !chat.participants.some(p => p.toString() === (authSocket.user!._id as any).toString())) return;
+          const message = await Message.findById(messageId);
+          if (!message) return;
+
+          message.reactions = message.reactions || [];
+          const existingIndex = message.reactions.findIndex(r => r.userId.toString() === (authSocket.user!._id as any).toString());
+          if (existingIndex >= 0) {
+            if (message.reactions[existingIndex].emoji === emoji) {
+              message.reactions.splice(existingIndex, 1);
+            } else {
+              message.reactions[existingIndex].emoji = emoji;
+            }
+          } else {
+            (message.reactions as any).push({ userId: authSocket.user._id, emoji });
+          }
+          await message.save();
+          this.io.to(`chat_${chatId}`).emit('message_reaction_update', {
+            chatId,
+            messageId,
+            reactions: message.reactions
+          });
+        } catch (error) {
+          console.error('Error handling message reaction:', error);
+        }
       });
 
       // Handle partner request notifications

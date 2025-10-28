@@ -9,7 +9,10 @@ import {
   getUserChats, 
   deleteMessageForMe,
   deleteMessageForEveryone,
-  editMessage 
+  editMessage,
+  reactToMessage,
+  processMessages,
+  validateFileUpload
 } from '@/controllers/chatController';
 import { uploadFile, getFile, deleteFile, uploadVoiceMessage } from '@/controllers/fileController';
 import { upload } from '@/controllers/fileController';
@@ -29,6 +32,9 @@ router.post('/send', sendMessage);
 router.put('/message/:messageId/viewed', markMessageAsViewed);
 router.get('/message/:messageId/view-status', getMessageViewStatus);
 router.put('/message/:messageId/edit', editMessage);
+router.put('/message/:messageId/react', reactToMessage);
+router.get('/:chatId/processed-messages', processMessages);
+router.post('/validate-file', validateFileUpload);
 router.patch('/message/:messageId/delete-for-me', deleteMessageForMe);
 router.patch('/:chatId/delete-for-everyone/:messageId', deleteMessageForEveryone);
 

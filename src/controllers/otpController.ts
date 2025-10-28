@@ -298,10 +298,8 @@ export const sendEmailOTPController = asyncHandler(async (req: Request, res: Res
 
   await otpRecord.save();
 
-  // Send OTP via email (don't wait for result - always succeed)
-  sendEmailWithOTP(email, otp).catch(err => {
-    console.log('⚠️ Email sending failed (ignored for dev):', err);
-  });
+  // Send OTP via email
+  await sendEmailWithOTP(email, otp);
   
   console.log(`✅ OTP generated for ${email}: ${otp}`);
 
@@ -399,10 +397,8 @@ export const resendEmailOTPController = asyncHandler(async (req: Request, res: R
 
   await otpRecord.save();
 
-  // Send OTP via email (don't wait for result - always succeed)
-  sendEmailWithOTP(email, otp).catch(err => {
-    console.log('⚠️ Email sending failed (ignored for dev):', err);
-  });
+  // Send OTP via email
+  await sendEmailWithOTP(email, otp);
   
   console.log(`✅ OTP regenerated for ${email}: ${otp}`);
 

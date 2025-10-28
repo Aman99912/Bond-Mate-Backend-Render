@@ -459,3 +459,165 @@ export const editMessage = asyncHandler(async (req: Request, res: Response) => {
     data: { message }
   });
 });
+
+// ============================
+// Reactions
+// ============================
+export const reactToMessage = asyncHandler(async (req: Request, res: Response) => {
+  const { messageId } = req.params;
+  const { emoji } = req.body as { emoji: string };
+  const userId = req.user?.userId as string;
+
+  if (!emoji) {
+    throw new AppError('Emoji is required', 400);
+  }
+
+  const allowedEmojis = new Set(['❤️', '😂', '👍', '😮', '😢', '🙏']);
+  if (!allowedEmojis.has(emoji)) {
+    throw new AppError('Emoji not allowed', 400);
+  }
+
+  const message = await Message.findById(messageId);
+  if (!message) {
+    throw new AppError('Message not found', 404);
+  }
+
+  // Verify user is participant
+  const chat = await Chat.findById(message.chatId);
+  if (!chat || !userId || !chat.participants.some(p => p.toString() === userId)) {
+    throw new AppError('Access denied', 403);
+  }
+
+  message.reactions = message.reactions || [];
+  const existingIndex = message.reactions.findIndex(r => r.userId.toString() === userId);
+  if (existingIndex >= 0) {
+    // Toggle if same emoji, else replace
+    if (message.reactions[existingIndex].emoji === emoji) {
+      message.reactions.splice(existingIndex, 1);
+    } else {
+      message.reactions[existingIndex].emoji = emoji;
+    }
+  } else {
+    (message.reactions as any).push({ userId, emoji });
+  }
+
+  await message.save();
+
+  // Emit to chat room
+  const socketHandler = getSocketHandler();
+  if (socketHandler) {
+    socketHandler.sendMessageToChat((message.chatId as any).toString(), {
+      chatId: (message.chatId as any).toString(),
+      reaction_update: {
+        messageId: message._id,
+        reactions: message.reactions
+      }
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'Reaction updated',
+    data: {
+      reactions: message.reactions
+    }
+  });
+});
+
+// Process and format messages for frontend
+export const processMessages = asyncHandler(async (req: Request, res: Response) => {
+  const { chatId } = req.params;
+  const userId = req.user?.userId;
+
+  // Verify user access to chat
+  const chat = await Chat.findById(chatId);
+  if (!chat || !chat.participants.some(p => p.toString() === userId)) {
+    throw new AppError('Access denied', 403);
+  }
+
+  const messages = await Message.find({ chatId })
+    .populate('senderId', 'name avatar')
+    .populate('replyTo', 'content type senderId')
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+  // Process messages on backend
+  const processedMessages = messages.map(msg => {
+    const processed: any = msg.toObject();
+    
+    // Format file URLs
+    if (processed.fileUrl && !processed.fileUrl.startsWith('http')) {
+      processed.fileUrl = `${process.env.API_BASE_URL || 'http://localhost:3000'}${processed.fileUrl}`;
+    }
+    
+    if (processed.thumbnailUrl && !processed.thumbnailUrl.startsWith('http')) {
+      processed.thumbnailUrl = `${process.env.API_BASE_URL || 'http://localhost:3000'}${processed.thumbnailUrl}`;
+    }
+
+    // Format sender info
+    if (processed.senderId && typeof processed.senderId === 'object') {
+      processed.senderName = (processed.senderId as any).name;
+      processed.senderAvatar = (processed.senderId as any).avatar;
+    }
+
+    // Format reply info
+    if (processed.replyTo && typeof processed.replyTo === 'object') {
+      const replyTo = processed.replyTo as any;
+      processed.replyContent = replyTo.type === 'image' ? '📷 Image' : 
+                              replyTo.type === 'video' ? '🎥 Video' : 
+                              replyTo.type === 'audio' ? '🎤 Audio' : 
+                              replyTo.content;
+    }
+
+    // Format reactions
+    if (processed.reactions) {
+      processed.reactionSummary = processed.reactions.reduce((acc: any, r: any) => {
+        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    return processed;
+  });
+
+  res.json({
+    success: true,
+    data: { messages: processedMessages }
+  });
+});
+
+// Validate and process file uploads
+export const validateFileUpload = asyncHandler(async (req: Request, res: Response) => {
+  const { fileSize, mimeType, fileName } = req.body;
+  
+  // File size validation (10MB max)
+  const MAX_SIZE = 10 * 1024 * 1024;
+  if (fileSize > MAX_SIZE) {
+    throw new AppError('File too large. Maximum size is 10MB', 400);
+  }
+
+  // MIME type validation
+  const allowedTypes = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'video/mp4', 'video/quicktime', 'video/x-msvideo',
+    'audio/mpeg', 'audio/mp4', 'audio/wav',
+    'application/pdf', 'text/plain'
+  ];
+
+  if (!allowedTypes.includes(mimeType)) {
+    throw new AppError('File type not allowed', 400);
+  }
+
+  // File name sanitization
+  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+  res.json({
+    success: true,
+    data: {
+      isValid: true,
+      sanitizedFileName,
+      fileSize,
+      mimeType
+    }
+  });
+});

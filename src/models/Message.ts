@@ -29,6 +29,8 @@ export interface IMessage extends Document {
   // Voice specific fields
   voiceDuration?: number;
   voiceWaveform?: number[]; // For voice visualization
+  // Reactions
+  reactions?: { userId: mongoose.Types.ObjectId; emoji: string }[];
   // Privacy and security
   isEncrypted?: boolean;
   encryptionKey?: string;
@@ -135,6 +137,11 @@ const MessageSchema = new Schema<IMessage>({
   voiceWaveform: [{
     type: Number
   }],
+  // Reactions
+  reactions: [{
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    emoji: { type: String, required: true }
+  }],
   // Privacy and security
   isEncrypted: {
     type: Boolean,
@@ -154,5 +161,6 @@ const MessageSchema = new Schema<IMessage>({
 MessageSchema.index({ chatId: 1, createdAt: -1 });
 MessageSchema.index({ senderId: 1 });
 MessageSchema.index({ isOneView: 1, viewedBy: 1 });
+MessageSchema.index({ 'reactions.userId': 1 });
 
 export default mongoose.model<IMessage>('Message', MessageSchema);

@@ -9,6 +9,7 @@ import { errorHandler, notFoundHandler } from '@/middleware/errorHandler';
 import routes from '@/routes';
 import connectDB from '@/config/database';
 import { initializeSocketHandler } from '@/socket/socketHandler';
+import logger from '@/utils/logger';
 import cronService from '@/services/cronService';
 
 const app = express();
@@ -29,9 +30,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  console.log('Origin:', req.get('Origin'));
-  console.log('Body:', req.body);
+  logger.debug(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  logger.debug('Origin:', req.get('Origin'));
+  logger.debug('Body:', req.body);
   next();
 });
 
@@ -56,7 +57,7 @@ app.use(errorHandler);
 
 // Initialize Socket.IO
 const socketHandler = initializeSocketHandler(server);
-console.log('🔌 Socket handler initialized:', !!socketHandler);
+logger.debug('🔌 Socket handler initialized:', !!socketHandler);
 
 // Connect to database and start server
 const PORT = config.port;
@@ -71,10 +72,10 @@ const startServer = async () => {
     
     // Start server with port conflict handling
     server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📊 Environment: ${config.nodeEnv}`);
-      console.log(`🌐 CORS enabled for: ${config.cors.origin}`);
-      console.log('🔌 Socket.IO server initialized');
+      logger.info(`🚀 Server running on port ${PORT}`);
+      logger.info(`📊 Environment: ${config.nodeEnv}`);
+      logger.info(`🌐 CORS enabled for: ${config.cors.origin}`);
+      logger.info('🔌 Socket.IO server initialized');
     }).on('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {
         console.error(`❌ Port ${PORT} is already in use. Please kill the process using this port or use a different port.`);

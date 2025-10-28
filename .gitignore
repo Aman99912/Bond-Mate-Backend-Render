@@ -152,3 +152,7 @@ Thumbs.db
 prisma/migrations/
 
 /src/generated/prisma
+
+# Uploads directory (user-uploaded files)
+uploads/
+uploads/*

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler, AppError } from '@/middleware/errorHandler';
 import multer from 'multer';
 import path from 'path';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import Message from '@/models/Message';
 import Chat from '@/models/Chat';
@@ -107,6 +108,30 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
     mimeType: req.file.mimetype,
     isOneView: isOneViewBool
   });
+
+  // Generate a thumbnail for videos (best-effort). Requires ffmpeg available on server.
+  if (messageType === 'video') {
+    try {
+      const uploadsDir = 'uploads';
+      const videoPath = path.join(uploadsDir, req.file.filename);
+      const thumbFile = `thumb-${path.parse(req.file.filename).name}.jpg`;
+      const thumbPath = path.join(uploadsDir, thumbFile);
+
+      await new Promise<void>((resolve, reject) => {
+        const ff = spawn('ffmpeg', ['-y', '-i', videoPath, '-ss', '00:00:01.000', '-vframes', '1', thumbPath]);
+        ff.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`ffmpeg exited with code ${code}`));
+        });
+        ff.on('error', reject);
+      });
+
+      message.thumbnailUrl = `/uploads/${thumbFile}` as any;
+      await message.save();
+    } catch (err) {
+      console.error('⚠️ Video thumbnail generation failed:', err);
+    }
+  }
 
   await message.populate('senderId', 'name avatar');
 
@@ -263,6 +288,28 @@ export const uploadVoiceMessage = asyncHandler(async (req: Request, res: Respons
     message: 'Sent a voice message',
     data: { chatId, messageId: message._id }
   });
+
+  // Emit socket event to chat participants
+  const socketHandler = getSocketHandler();
+  if (socketHandler) {
+    socketHandler.sendMessageToChat(chatId, {
+      chatId,
+      message: {
+        _id: message._id,
+        content: message.content,
+        senderId: message.senderId,
+        createdAt: message.createdAt,
+        type: message.type,
+        fileUrl: message.fileUrl,
+        fileName: message.fileName,
+        fileSize: message.fileSize,
+        mimeType: message.mimeType,
+        voiceDuration: message.voiceDuration,
+        voiceWaveform: message.voiceWaveform,
+        isOneView: message.isOneView
+      }
+    });
+  }
 
   res.json({
     success: true,
