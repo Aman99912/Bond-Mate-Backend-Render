@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authRoutes from './auth';
 import otpRoutes from './otp';
 import partnerRoutes from './partner';
+import enhancedPartnerRoutes from './enhancedPartner';
 import chatRoutes from './chat';
 import stickerRoutes from './sticker';
 import notificationRoutes from './notifications';
@@ -13,8 +14,15 @@ import walletRoutes from './wallet';
 import mediaRoutes from './media';
 import locationRoutes from './location';
 import profileRoutes from './profile';
+import nicknameRoutes from './nickname';
+import monitoringRoutes from './monitoring';
+import { securityMiddleware, securityHeaders } from '@/middleware/security';
 
 const router = Router();
+
+// Apply security middleware to all routes
+router.use(securityMiddleware);
+router.use(securityHeaders);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
@@ -22,13 +30,16 @@ router.get('/health', (req, res) => {
     success: true,
     message: 'Server is running',
     timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // API routes
 router.use('/auth', authRoutes);
 router.use('/otp', otpRoutes);
-router.use('/partners', partnerRoutes);
+router.use('/partners', partnerRoutes); // Keep original for backward compatibility
+router.use('/enhanced-partners', enhancedPartnerRoutes); // New enhanced routes
 router.use('/chat', chatRoutes);
 router.use('/stickers', stickerRoutes);
 router.use('/notifications', notificationRoutes);
@@ -40,5 +51,7 @@ router.use('/wallet', walletRoutes);
 router.use('/media', mediaRoutes);
 router.use('/location', locationRoutes);
 router.use('/profile', profileRoutes);
+router.use('/nicknames', nicknameRoutes);
+router.use('/monitoring', monitoringRoutes);
 
 export default router;

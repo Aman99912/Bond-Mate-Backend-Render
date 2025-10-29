@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
 import notificationService from '../services/notificationService';
+import logger from '@/utils/logger';
 
 // Helper function to check if both partners are active today
 const areBothPartnersActiveToday = (userLogin: Date, partnerLogin: Date): boolean => {
@@ -318,6 +319,113 @@ export const updateLastLogin = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error updating last login:', error);
     return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Update theme preference
+export const updateTheme = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { theme } = req.body;
+    const authenticatedUserId = req.user?.userId || req.user?.id;
+
+    // Security: Ensure user can only update their own theme
+    if (userId !== authenticatedUserId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: You can only update your own theme'
+      });
+    }
+
+    if (!theme) {
+      return res.status(400).json({
+        success: false,
+        message: 'Theme is required'
+      });
+    }
+
+    // Validate theme values
+    const validThemes = ['light', 'dark', 'water', 'love', 'sky', 'forest', 'custom'];
+    if (!validThemes.includes(theme)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid theme. Must be one of: ${validThemes.join(', ')}`
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { selectedTheme: theme },
+      { new: true, runValidators: true }
+    ).select('-password -subPassword');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Audit log
+    logger.info('Theme updated', {
+      userId: userId,
+      theme: theme,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      message: 'Theme updated successfully',
+      data: {
+        selectedTheme: user.selectedTheme
+      }
+    });
+  } catch (error) {
+    logger.error('Error updating theme:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get chat preferences (nickname + theme)
+export const getChatPreferences = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const authenticatedUserId = req.user?.userId || req.user?.id;
+
+    // Security: User can only view their own preferences
+    if (userId !== authenticatedUserId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: You can only view your own preferences'
+      });
+    }
+
+    const user = await User.findById(userId).select('name avatar selectedTheme');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Note: Nickname is fetched separately via nickname API
+    res.json({
+      success: true,
+      data: {
+        name: user.name,
+        avatar: user.avatar,
+        selectedTheme: user.selectedTheme || 'light'
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching chat preferences:', error);
+    res.status(500).json({
       success: false,
       message: 'Internal server error'
     });

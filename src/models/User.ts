@@ -116,6 +116,10 @@ export interface IUser extends Document {
   lastInteractionDate?: Date;
   notifications: string[];
 
+  // Chat preferences
+  selectedTheme?: string;
+  customTheme?: Record<string, any>;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -520,7 +524,20 @@ const UserSchema = new Schema<IUser>({
   notifications: [{
     type: String,
     trim: true
-  }]
+  }],
+
+  // Chat preferences
+  selectedTheme: {
+    type: String,
+    enum: ['light', 'dark', 'water', 'love', 'sky', 'forest', 'custom'],
+    default: 'light',
+    trim: true
+  },
+  customTheme: {
+    type: Map,
+    of: Schema.Types.Mixed,
+    default: {}
+  }
 }, {
   timestamps: true,
   toJSON: {

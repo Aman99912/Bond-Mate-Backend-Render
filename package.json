@@ -11,7 +11,9 @@
     "dev:clean": "npm run build && npm run start",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "echo \"No tests specified\" && exit 0",
+    "verify:production": "node scripts/verify-production-readiness.js",
+    "verify:security": "npm run lint && npm run verify:production"
   },
   "keywords": [
     "express",

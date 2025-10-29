@@ -11,6 +11,7 @@ import connectDB from '@/config/database';
 import { initializeSocketHandler } from '@/socket/socketHandler';
 import logger from '@/utils/logger';
 import cronService from '@/services/cronService';
+import backgroundWorker from '@/services/backgroundWorker';
 
 const app = express();
 const server = createServer(app);
@@ -69,6 +70,9 @@ const startServer = async () => {
     
     // Start cron jobs
     cronService.startCronJobs();
+    
+    // Start background workers
+    backgroundWorker.start();
     
     // Start server with port conflict handling
     server.listen(PORT, () => {
