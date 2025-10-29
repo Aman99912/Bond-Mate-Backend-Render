@@ -22,7 +22,7 @@ export const createRateLimiter = (config: {
     legacyHeaders: false,
     skipSuccessfulRequests: config.skipSuccessfulRequests || false,
     skipFailedRequests: config.skipFailedRequests || false,
-    keyGenerator: config.keyGenerator || ((req: Request) => req.ip),
+    keyGenerator: config.keyGenerator || ((req: Request) => req.ip || 'unknown'),
     handler: async (req: Request, res: Response) => {
       const userId = (req as any).user?.userId || (req as any).user?.id;
       

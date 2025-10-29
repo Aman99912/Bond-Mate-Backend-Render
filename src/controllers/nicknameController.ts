@@ -10,7 +10,7 @@ import logger from '@/utils/logger';
  */
 export const getNicknames = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = req.user?.userId;
     
     if (!userId) {
       res.status(401).json({
@@ -52,7 +52,7 @@ export const getNicknames = async (req: Request, res: Response): Promise<void> =
  */
 export const getNicknameForUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = req.user?.userId;
     const { targetUserId } = req.params;
     
     if (!userId) {
@@ -114,7 +114,7 @@ export const getNicknameForUser = async (req: Request, res: Response): Promise<v
  */
 export const setNickname = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = req.user?.userId;
     const { targetUserId, nickname, conversationId } = req.body;
     
     if (!userId) {
@@ -233,7 +233,7 @@ export const setNickname = async (req: Request, res: Response): Promise<void> =>
  */
 export const deleteNickname = async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = req.user?.userId;
     const { targetUserId } = req.params;
     
     if (!userId) {

@@ -326,34 +326,37 @@ export const updateLastLogin = async (req: Request, res: Response) => {
 };
 
 // Update theme preference
-export const updateTheme = async (req: Request, res: Response) => {
+export const updateTheme = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
     const { theme } = req.body;
-    const authenticatedUserId = req.user?.userId || req.user?.id;
+    const authenticatedUserId = req.user?.userId;
 
     // Security: Ensure user can only update their own theme
     if (userId !== authenticatedUserId) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'Forbidden: You can only update your own theme'
       });
+      return;
     }
 
     if (!theme) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Theme is required'
       });
+      return;
     }
 
     // Validate theme values
     const validThemes = ['light', 'dark', 'water', 'love', 'sky', 'forest', 'custom'];
     if (!validThemes.includes(theme)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: `Invalid theme. Must be one of: ${validThemes.join(', ')}`
       });
+      return;
     }
 
     const user = await User.findByIdAndUpdate(
@@ -363,10 +366,11 @@ export const updateTheme = async (req: Request, res: Response) => {
     ).select('-password -subPassword');
 
     if (!user) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'User not found'
       });
+      return;
     }
 
     // Audit log
@@ -393,25 +397,27 @@ export const updateTheme = async (req: Request, res: Response) => {
 };
 
 // Get chat preferences (nickname + theme)
-export const getChatPreferences = async (req: Request, res: Response) => {
+export const getChatPreferences = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
-    const authenticatedUserId = req.user?.userId || req.user?.id;
+    const authenticatedUserId = req.user?.userId;
 
     // Security: User can only view their own preferences
     if (userId !== authenticatedUserId) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'Forbidden: You can only view your own preferences'
       });
+      return;
     }
 
     const user = await User.findById(userId).select('name avatar selectedTheme');
     if (!user) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'User not found'
       });
+      return;
     }
 
     // Note: Nickname is fetched separately via nickname API

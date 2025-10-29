@@ -94,7 +94,7 @@ export const validatePartnerRequest = [
       }
       return true;
     }),
-  (req: Request, res: Response, next: NextFunction) => {
+  (req: Request, res: Response, next: NextFunction): void => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       const userId = (req as any).user?.userId || (req as any).user?.id;
@@ -113,12 +113,14 @@ export const validatePartnerRequest = [
         }
       });
 
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Validation failed',
         errors: errors.array()
       });
+      return;
     }
+    
     next();
   }
 ];
@@ -131,10 +133,11 @@ export const requireRole = (roles: string[]) => {
     const user = (req as any).user;
     
     if (!user) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         message: 'Authentication required'
       });
+      return;
     }
 
     // For now, all authenticated users have 'user' role
@@ -156,10 +159,11 @@ export const requireRole = (roles: string[]) => {
         }
       });
 
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'Insufficient permissions'
       });
+      return;
     }
 
     next();
@@ -190,10 +194,11 @@ export const requestSizeLimiter = (maxSize: number = 1024 * 1024) => { // 1MB de
         }
       });
 
-      return res.status(413).json({
+      res.status(413).json({
         success: false,
         message: 'Request too large'
       });
+      return;
     }
 
     next();
@@ -205,9 +210,9 @@ export const requestSizeLimiter = (maxSize: number = 1024 * 1024) => { // 1MB de
  */
 export const ipWhitelist = (allowedIPs: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const clientIP = req.ip || req.connection.remoteAddress;
+    const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
     
-    if (!allowedIPs.includes(clientIP)) {
+    if (!clientIP || !allowedIPs.includes(clientIP)) {
       const userId = (req as any).user?.userId || (req as any).user?.id;
       
       auditService.logSecurityEvent({
@@ -224,10 +229,11 @@ export const ipWhitelist = (allowedIPs: string[]) => {
         }
       });
 
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'Access denied'
       });
+      return;
     }
 
     next();
@@ -264,10 +270,11 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
       }
     });
 
-    return res.status(403).json({
+    res.status(403).json({
       success: false,
       message: 'CSRF token validation failed'
     });
+    return;
   }
 
   next();

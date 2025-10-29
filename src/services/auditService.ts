@@ -1,4 +1,4 @@
-import ActivityLog from '@/models/ActivityLog';
+import ActivityLog, { IActivityLog } from '@/models/ActivityLog';
 import logger from '@/utils/logger';
 
 export interface AuditLogData {

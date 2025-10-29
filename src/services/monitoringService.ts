@@ -106,7 +106,7 @@ class MonitoringService {
     
     try {
       // Test database connection
-      await mongoose.connection.db.admin().ping();
+      await mongoose.connection.db?.admin().ping();
       const responseTime = Date.now() - startTime;
       
       return {
@@ -126,14 +126,20 @@ class MonitoringService {
   /**
    * Get partner-related metrics
    */
-  private async getPartnerMetrics(): Promise<{
+  private   async getPartnerMetrics(): Promise<{
     totalActive: number;
     totalPendingRequests: number;
     totalBreakupRequests: number;
     recentActivity: number;
   }> {
     try {
-      return await partnerService.getPartnerStatistics();
+      const stats = await partnerService.getPartnerStatistics();
+      return {
+        totalActive: stats.totalActivePartnerships,
+        totalPendingRequests: stats.totalPendingRequests,
+        totalBreakupRequests: stats.totalBreakupRequests,
+        recentActivity: stats.recentActivity
+      };
     } catch (error) {
       logger.error('Failed to get partner metrics', {
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -150,13 +156,18 @@ class MonitoringService {
   /**
    * Get notification metrics
    */
-  private async getNotificationMetrics(): Promise<{
+  private   async getNotificationMetrics(): Promise<{
     totalSent: number;
     unreadCount: number;
     recentCount: number;
   }> {
     try {
-      return await enhancedNotificationService.getNotificationStats();
+      const stats = await enhancedNotificationService.getNotificationStats();
+      return {
+        totalSent: stats.totalNotifications,
+        unreadCount: stats.unreadNotifications,
+        recentCount: stats.recentNotifications
+      };
     } catch (error) {
       logger.error('Failed to get notification metrics', {
         error: error instanceof Error ? error.message : 'Unknown error'

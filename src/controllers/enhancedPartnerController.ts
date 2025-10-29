@@ -15,7 +15,15 @@ import { body, validationResult } from 'express-validator';
  */
 export const sendPartnerRequest = asyncHandler(async (req: Request, res: Response) => {
   const { toUserId, message } = req.body;
-  const fromUserId = req.user?.userId || req.user?.id;
+  const fromUserId = req.user?.userId;
+
+  if (!fromUserId) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  if (!toUserId) {
+    throw new AppError('Target user ID is required', 400);
+  }
 
   // Validate input
   const validation = partnerService.validatePartnerRequest({ toUserId, message, fromUserId });
@@ -165,7 +173,15 @@ export const sendPartnerRequest = asyncHandler(async (req: Request, res: Respons
  */
 export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Response) => {
   const { requestId } = req.params;
-  const userId = req.user?.userId || req.user?.id;
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  if (!requestId) {
+    throw new AppError('Request ID is required', 400);
+  }
 
   // Start transaction for atomic operations
   const session = await mongoose.startSession();
@@ -338,7 +354,15 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
  */
 export const rejectPartnerRequest = asyncHandler(async (req: Request, res: Response) => {
   const { requestId } = req.params;
-  const userId = req.user?.userId || req.user?.id;
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  if (!requestId) {
+    throw new AppError('Request ID is required', 400);
+  }
 
   // Start transaction for atomic operations
   const session = await mongoose.startSession();
@@ -411,6 +435,11 @@ export const rejectPartnerRequest = asyncHandler(async (req: Request, res: Respo
         $pull: { pendingRequests: { requestId: requestId } }
       }, { session })
     ]);
+
+    // Ensure fromUserId is defined
+    if (!fromUserId) {
+      throw new AppError('Invalid request data', 400);
+    }
 
     // Create history entries
     await PartnerHistory.create([{
@@ -495,7 +524,7 @@ export const rejectPartnerRequest = asyncHandler(async (req: Request, res: Respo
  * Get partner requests with enhanced error handling
  */
 export const getPartnerRequests = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.userId || req.user?.id;
+  const userId = req.user?.userId;
 
   const user = await User.findById(userId).select('pendingRequests');
   if (!user) {
@@ -537,30 +566,36 @@ export const getPartnerRequests = asyncHandler(async (req: Request, res: Respons
 /**
  * Get current partner with enhanced error handling
  */
-export const getCurrentPartner = asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user?.userId || req.user?.id;
+export const getCurrentPartner = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    throw new AppError('User not authenticated', 401);
+  }
 
   const user = await User.findById(userId).select('partners');
   if (!user || !user.partners || user.partners.length === 0) {
-    return res.json({
+    res.json({
       success: true,
       message: 'No active partner found',
       data: {
         partner: null
       }
     });
+    return;
   }
 
   // Find active partner
   const activePartner = user.partners.find(p => p.status === 'active');
   if (!activePartner) {
-    return res.json({
+    res.json({
       success: true,
       message: 'No active partner found',
       data: {
         partner: null
       }
     });
+    return;
   }
 
   // Get full partner details
@@ -568,13 +603,14 @@ export const getCurrentPartner = asyncHandler(async (req: Request, res: Response
     .select('name email avatar dob gender bio UserSearchId');
 
   if (!partner) {
-    return res.json({
+    res.json({
       success: true,
       message: 'No active partner found',
       data: {
         partner: null
       }
     });
+    return;
   }
 
   // Transform partner to include id field
@@ -598,7 +634,11 @@ export const getCurrentPartner = asyncHandler(async (req: Request, res: Response
  */
 export const searchUsers = asyncHandler(async (req: Request, res: Response) => {
   const { searchId } = req.query;
-  const currentUserId = req.user?.userId || req.user?.id;
+  const currentUserId = req.user?.userId;
+
+  if (!currentUserId) {
+    throw new AppError('User not authenticated', 401);
+  }
 
   if (!searchId || typeof searchId !== 'string') {
     throw new AppError('Search ID is required', 400);
@@ -621,11 +661,11 @@ export const searchUsers = asyncHandler(async (req: Request, res: Response) => {
     
     // Check if current user already has a partner
     const currentUser = await User.findById(currentUserId).select('partners');
-    const hasCurrentUserPartner = currentUser?.partners?.filter(p => p.status === 'active').length > 0;
+    const hasCurrentUserPartner = (currentUser?.partners?.filter(p => p.status === 'active').length || 0) > 0;
     
     // Check if target user already has a partner
     const targetUser = await User.findById(userId).select('partners');
-    const hasTargetUserPartner = targetUser?.partners?.filter(p => p.status === 'active').length > 0;
+    const hasTargetUserPartner = (targetUser?.partners?.filter(p => p.status === 'active').length || 0) > 0;
 
     // Check for pending request
     const existingRequest = await PartnerRequest.findOne({
@@ -692,14 +732,15 @@ export const validatePartnerRequest = [
     .optional()
     .isLength({ max: 500 })
     .withMessage('Message cannot exceed 500 characters'),
-  (req: Request, res: Response, next: any) => {
+  (req: Request, res: Response, next: any): void => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Validation failed',
         errors: errors.array()
       });
+      return;
     }
     next();
   }

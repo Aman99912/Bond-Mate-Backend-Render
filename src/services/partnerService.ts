@@ -312,11 +312,11 @@ class PartnerService {
         ]
       });
 
-      if (deletedCount > 0) {
+      if (deletedCount.deletedCount > 0) {
         logger.info('Cleaned up old partner requests', {
           fromUserId,
           toUserId,
-          deletedCount
+          deletedCount: deletedCount.deletedCount
         });
       }
     } catch (error) {
