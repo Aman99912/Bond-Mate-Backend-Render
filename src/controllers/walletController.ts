@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { asyncHandler, AppError } from '@/middleware/errorHandler';
 import WalletItem from '@/models/WalletItem';
 import { IWalletItem } from '@/models/WalletItem';
@@ -277,6 +278,56 @@ export const toggleTodoItem = asyncHandler(async (req: Request, res: Response) =
 
   res.json({
     success: true,
+    data: { walletItem }
+  });
+});
+
+// Update approval status for wallet item
+export const updateWalletItemApproval = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  const { id } = req.params;
+  const { action } = req.body as { action?: 'approve' | 'reject' | 'pending' };
+
+  if (!userId) {
+    throw new AppError('User not authenticated', 401);
+  }
+
+  if (!action || !['approve', 'reject'].includes(action)) {
+    throw new AppError('Invalid approval action', 400);
+  }
+
+  const walletItem = await WalletItem.findById(id)
+    .populate('userId', 'name avatar')
+    .populate('partnerId', 'name avatar');
+
+  if (!walletItem) {
+    throw new AppError('Wallet item not found', 404);
+  }
+
+  // Only the partner (not the owner) can approve or reject
+  const partnerId = walletItem.partnerId instanceof mongoose.Types.ObjectId
+    ? walletItem.partnerId.toString()
+    : (walletItem.partnerId as any)?._id?.toString();
+
+  if (!partnerId) {
+    throw new AppError('Wallet item is not linked to a partner', 400);
+  }
+
+  if (partnerId !== userId) {
+    throw new AppError('Only the partner can update approval status', 403);
+  }
+
+  walletItem.approvalStatus = action === 'approve' ? 'approved' : 'rejected';
+  walletItem.approvalStatusUpdatedAt = new Date();
+  walletItem.approvalStatusUpdatedBy = new mongoose.Types.ObjectId(userId);
+
+  await walletItem.save();
+  await walletItem.populate('userId', 'name avatar');
+  await walletItem.populate('partnerId', 'name avatar');
+
+  res.json({
+    success: true,
+    message: `Wallet item ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
     data: { walletItem }
   });
 });

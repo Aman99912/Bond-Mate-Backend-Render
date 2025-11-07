@@ -29,6 +29,9 @@ export interface IWalletItem extends Document {
   isEncrypted: boolean;
   tags?: string[];
   isShared: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  approvalStatusUpdatedAt?: Date;
+  approvalStatusUpdatedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -126,6 +129,18 @@ const WalletItemSchema = new Schema<IWalletItem>({
   isShared: {
     type: Boolean,
     default: true
+  },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  approvalStatusUpdatedAt: {
+    type: Date
+  },
+  approvalStatusUpdatedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User'
   }
 }, {
   timestamps: true

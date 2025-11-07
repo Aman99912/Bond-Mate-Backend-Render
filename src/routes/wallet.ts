@@ -6,7 +6,8 @@ import {
   createWalletItem,
   updateWalletItem,
   deleteWalletItem,
-  toggleTodoItem
+  toggleTodoItem,
+  updateWalletItemApproval
 } from '@/controllers/walletController';
 import { authenticate } from '@/middleware/auth';
 
@@ -35,5 +36,8 @@ router.delete('/items/:id', deleteWalletItem);
 
 // Toggle todo item completion
 router.patch('/items/:id/todo/:todoItemId', toggleTodoItem);
+
+// Update approval status for a wallet item
+router.post('/items/:id/approval', updateWalletItemApproval);
 
 export default router;
