@@ -21,26 +21,11 @@ export const getWalletCategories = asyncHandler(async (req: Request, res: Respon
 // Get social media platforms
 export const getSocialMediaPlatforms = asyncHandler(async (req: Request, res: Response) => {
   const platforms = [
-    { value: 'facebook', label: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
     { value: 'instagram', label: 'Instagram', icon: 'logo-instagram', color: '#E4405F' },
-    { value: 'twitter', label: 'Twitter', icon: 'logo-twitter', color: '#1DA1F2' },
-    { value: 'linkedin', label: 'LinkedIn', icon: 'logo-linkedin', color: '#0077B5' },
-    { value: 'youtube', label: 'YouTube', icon: 'logo-youtube', color: '#FF0000' },
-    { value: 'tiktok', label: 'TikTok', icon: 'logo-tiktok', color: '#000000' },
     { value: 'snapchat', label: 'Snapchat', icon: 'logo-snapchat', color: '#FFFC00' },
     { value: 'whatsapp', label: 'WhatsApp', icon: 'logo-whatsapp', color: '#25D366' },
     { value: 'telegram', label: 'Telegram', icon: 'logo-telegram', color: '#0088CC' },
     { value: 'discord', label: 'Discord', icon: 'logo-discord', color: '#5865F2' },
-    { value: 'reddit', label: 'Reddit', icon: 'logo-reddit', color: '#FF4500' },
-    { value: 'pinterest', label: 'Pinterest', icon: 'logo-pinterest', color: '#BD081C' },
-    { value: 'github', label: 'GitHub', icon: 'logo-github', color: '#181717' },
-    { value: 'google', label: 'Google', icon: 'logo-google', color: '#4285F4' },
-    { value: 'apple', label: 'Apple', icon: 'logo-apple', color: '#000000' },
-    { value: 'microsoft', label: 'Microsoft', icon: 'logo-microsoft', color: '#00BCF2' },
-    { value: 'amazon', label: 'Amazon', icon: 'logo-amazon', color: '#FF9900' },
-    { value: 'netflix', label: 'Netflix', icon: 'logo-netflix', color: '#E50914' },
-    { value: 'spotify', label: 'Spotify', icon: 'logo-spotify', color: '#1DB954' },
-    { value: 'other', label: 'Other', icon: 'globe', color: '#6B7280' }
   ];
 
   res.json({
@@ -179,36 +164,62 @@ export const createWalletItem = asyncHandler(async (req: Request, res: Response)
 export const updateWalletItem = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.userId;
   const { id } = req.params;
-  const updateData = req.body;
+  const updateData = req.body as Partial<IWalletItem>;
 
   if (!userId) {
     throw new AppError('User not authenticated', 401);
   }
 
-  // Check if user has access to this item
   const walletItem = await WalletItem.findOne({
     _id: id,
-    $or: [
-      { userId: userId },
-      { partnerId: userId }
-    ]
+    userId: userId,
   });
 
   if (!walletItem) {
     throw new AppError('Wallet item not found or access denied', 404);
   }
 
-  // Update the item
-  const updatedItem = await WalletItem.findByIdAndUpdate(
-    id,
-    updateData,
-    { new: true, runValidators: true }
-  ).populate('userId', 'name avatar')
-   .populate('partnerId', 'name avatar');
+  const allowedFields: Array<keyof Partial<IWalletItem>> = [
+    'title',
+    'content',
+    'todoItems',
+    'platform',
+    'username',
+    'password',
+    'icon',
+    'url',
+    'tags',
+    'category',
+    'type',
+  ];
+
+  allowedFields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(updateData, field)) {
+      (walletItem as any)[field] = updateData[field as keyof typeof updateData];
+    }
+  });
+
+  if (Object.prototype.hasOwnProperty.call(updateData, 'todoItems')) {
+    walletItem.markModified('todoItems');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updateData, 'tags')) {
+    walletItem.markModified('tags');
+  }
+
+  walletItem.type = walletItem.category;
+  walletItem.approvalStatus = 'pending';
+  walletItem.approvalStatusUpdatedAt = new Date();
+  walletItem.approvalStatusUpdatedBy = new mongoose.Types.ObjectId(userId);
+
+  await walletItem.save();
+
+  await walletItem.populate('userId', 'name avatar');
+  await walletItem.populate('partnerId', 'name avatar');
 
   res.json({
     success: true,
-    data: { walletItem: updatedItem }
+    data: { walletItem }
   });
 });
 
