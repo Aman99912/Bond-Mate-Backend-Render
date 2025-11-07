@@ -206,31 +206,36 @@ PartnerHistorySchema.index({ partnerId: 1 });
 PartnerHistorySchema.index({ action: 1 });
 
 // Ensure only one active relationship per user
+// ⚠️ FIX: Check User.partners array instead of Partner collection
+// This allows restoration after breakup within 30 days
 PartnerSchema.pre('save', async function(next) {
   try {
     if (this.isNew && this.status === 'active') {
-      // Only validate if this is a new document with active status
-      const existingPartner1 = await this.model('Partner').findOne({
-        $or: [
-          { user1Id: this.user1Id, status: 'active' },
-          { user2Id: this.user1Id, status: 'active' }
-        ]
-      }).exec();
-
-      if (existingPartner1) {
+      // Import User model
+      const User = this.model('User');
+      
+      // Check User model partners array, not Partner collection
+      // This is the source of truth for active relationships
+      const user1: any = await User.findById(this.user1Id).select('partners');
+      const user2: any = await User.findById(this.user2Id).select('partners');
+      
+      // Check if users already have active partners in their partners array
+      const user1HasPartner = user1?.partners?.some((p: any) => p.status === 'active') || false;
+      const user2HasPartner = user2?.partners?.some((p: any) => p.status === 'active') || false;
+      
+      if (user1HasPartner) {
+        console.log(`❌ User ${this.user1Id} already has an active partner in User.partners array`);
         return next(new Error('User already has an active relationship'));
       }
 
-      const existingPartner2 = await this.model('Partner').findOne({
-        $or: [
-          { user1Id: this.user2Id, status: 'active' },
-          { user2Id: this.user2Id, status: 'active' }
-        ]
-      }).exec();
-
-      if (existingPartner2) {
+      if (user2HasPartner) {
+        console.log(`❌ User ${this.user2Id} already has an active partner in User.partners array`);
         return next(new Error('Partner already has an active relationship'));
       }
+      
+      // ✅ Both users have empty partners arrays, allow Partner document creation
+      // This fixes the issue where breakup clears User.partners but Partner doc might still exist
+      console.log(`✅ Both users have no active partners, allowing Partner document creation`);
     }
     next();
   } catch (error) {

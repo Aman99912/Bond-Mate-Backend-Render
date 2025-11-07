@@ -1,14 +1,13 @@
 import { Router } from 'express';
-import { authenticate } from '@/middleware/auth';
-import { requireRole } from '@/middleware/security';
+import { authenticateAdmin, requireRole } from '@/middleware/adminAuth';
 import monitoringService from '@/services/monitoringService';
 import auditService from '@/services/auditService';
 import logger from '@/utils/logger';
 
 const router = Router();
 
-// All monitoring routes require authentication
-router.use(authenticate);
+// All monitoring routes require admin authentication
+router.use(authenticateAdmin);
 
 // Health check endpoint (public)
 router.get('/health', async (req, res) => {
@@ -37,7 +36,7 @@ router.get('/health', async (req, res) => {
 });
 
 // System metrics (admin only)
-router.get('/metrics', requireRole(['admin']), async (req, res) => {
+router.get('/metrics', requireRole('admin', 'super_admin'), async (req, res) => {
   try {
     const metrics = await monitoringService.getSystemMetrics();
     
@@ -59,7 +58,7 @@ router.get('/metrics', requireRole(['admin']), async (req, res) => {
 });
 
 // System alerts (admin only)
-router.get('/alerts', requireRole(['admin']), async (req, res) => {
+router.get('/alerts', requireRole('admin', 'super_admin'), async (req, res) => {
   try {
     const alerts = await monitoringService.getAlerts();
     
@@ -88,7 +87,7 @@ router.get('/alerts', requireRole(['admin']), async (req, res) => {
 });
 
 // Activity logs (admin only)
-router.get('/activity-logs', requireRole(['admin']), async (req, res) => {
+router.get('/activity-logs', requireRole('admin', 'super_admin'), async (req, res) => {
   try {
     const { userId, action, limit = 50, offset = 0 } = req.query;
     
@@ -117,7 +116,7 @@ router.get('/activity-logs', requireRole(['admin']), async (req, res) => {
 });
 
 // Security events (admin only)
-router.get('/security-events', requireRole(['admin']), async (req, res) => {
+router.get('/security-events', requireRole('admin', 'super_admin'), async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     
@@ -144,7 +143,7 @@ router.get('/security-events', requireRole(['admin']), async (req, res) => {
 });
 
 // Refresh metrics (admin only)
-router.post('/refresh', requireRole(['admin']), async (req, res) => {
+router.post('/refresh', requireRole('admin', 'super_admin'), async (req, res) => {
   try {
     const metrics = await monitoringService.refreshMetrics();
     

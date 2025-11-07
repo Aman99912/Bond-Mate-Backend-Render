@@ -56,13 +56,34 @@ class NotificationService {
       // Get user's push token from currentDeviceInfo (FCM token)
       const user = await User.findById(userId).select('pushToken currentDeviceInfo');
       
-      // Try to get token from currentDeviceInfo first (from login), then fallback to pushToken
-      const fcmToken = user?.currentDeviceInfo?.fcmToken || user?.pushToken;
-      
-      if (!fcmToken) {
-        console.log(`No push/FCM token found for user ${userId}`);
+      if (!user) {
+        console.log(`❌ User not found: ${userId}`);
         return false;
       }
+      
+      // Try to get token from currentDeviceInfo first (new location, from login)
+      let fcmToken = user.currentDeviceInfo?.fcmToken;
+      
+      // Fallback to pushToken (old location) for backward compatibility
+      if (!fcmToken) {
+        fcmToken = user.pushToken;
+        if (fcmToken) {
+          console.log(`📱 Using pushToken (legacy) for user: ${userId}`);
+        }
+      }
+      
+      if (!fcmToken) {
+        console.log(`❌ No push/FCM token found for user: ${userId}`);
+        console.log('Debug info:', {
+          hasCurrentDeviceInfo: !!user.currentDeviceInfo,
+          hasFcmTokenInDeviceInfo: !!user.currentDeviceInfo?.fcmToken,
+          hasPushToken: !!user.pushToken,
+          deviceInfoKeys: user.currentDeviceInfo ? Object.keys(user.currentDeviceInfo) : []
+        });
+        return false;
+      }
+      
+      console.log(`📱 Sending push notification to user ${userId}, token: ${fcmToken.substring(0, 30)}...`);
 
       const message = {
         to: fcmToken,
@@ -85,10 +106,15 @@ class NotificationService {
         },
       });
 
-      console.log('✅ Push notification sent:', response.data);
-      return true;
-    } catch (error) {
-      console.error('❌ Error sending push notification:', error);
+      if (response.data.data?.status === 'ok') {
+        console.log(`✅ Push notification sent successfully to user: ${userId}`);
+        return true;
+      } else {
+        console.error(`❌ Push notification failed for user ${userId}:`, response.data);
+        return false;
+      }
+    } catch (error: any) {
+      console.error(`❌ Error sending push notification to user ${userId}:`, error.message);
       return false;
     }
   }
@@ -370,10 +396,25 @@ class NotificationService {
     requestId: string
   ) {
     try {
-      const user = await User.findById(toUserId);
-      if (!user?.pushToken) {
-        console.log('No push token found for user:', toUserId);
-        return;
+      // ⚠️ FIX: Check both currentDeviceInfo.fcmToken and pushToken
+      const user = await User.findById(toUserId).select('pushToken currentDeviceInfo');
+      
+      // Try to get token from currentDeviceInfo first (new location)
+      let fcmToken = user?.currentDeviceInfo?.fcmToken;
+      
+      // Fallback to pushToken (old location) for backward compatibility
+      if (!fcmToken) {
+        fcmToken = user?.pushToken;
+      }
+      
+      if (!fcmToken) {
+        console.log('No push/FCM token found for user:', toUserId);
+        console.log('Debug info:', {
+          hasCurrentDeviceInfo: !!user?.currentDeviceInfo,
+          hasFcmTokenInDeviceInfo: !!user?.currentDeviceInfo?.fcmToken,
+          hasPushToken: !!user?.pushToken
+        });
+        // Still create notification in database even if no push token
       }
 
       // Create notification in database with showInBadge flag
@@ -393,19 +434,21 @@ class NotificationService {
         }
       });
 
-      // Send push notification
-      await this.sendPushNotification(
-        toUserId,
-        'Breakup Request',
-        'Your friend wants to remove',
-        {
-          type: 'breakup_request',
-          requestId,
-          fromUserId,
-          reason,
-          deepLink: `bondmate://notifications?type=breakup&requestId=${requestId}`
-        }
-      );
+      // Send push notification only if token exists
+      if (fcmToken) {
+        await this.sendPushNotification(
+          toUserId,
+          'Breakup Request',
+          'Your friend wants to remove',
+          {
+            type: 'breakup_request',
+            requestId,
+            fromUserId,
+            reason,
+            deepLink: `bondmate://notifications?type=breakup&requestId=${requestId}`
+          }
+        );
+      }
 
       console.log('Breakup request notification sent to user:', toUserId);
     } catch (error) {
@@ -420,10 +463,20 @@ class NotificationService {
     acceptedBy: string
   ) {
     try {
-      const user = await User.findById(toUserId);
-      if (!user?.pushToken) {
-        console.log('No push token found for user:', toUserId);
-        return;
+      // ⚠️ FIX: Check both currentDeviceInfo.fcmToken and pushToken
+      const user = await User.findById(toUserId).select('pushToken currentDeviceInfo');
+      
+      // Try to get token from currentDeviceInfo first (new location)
+      let fcmToken = user?.currentDeviceInfo?.fcmToken;
+      
+      // Fallback to pushToken (old location) for backward compatibility
+      if (!fcmToken) {
+        fcmToken = user?.pushToken;
+      }
+      
+      if (!fcmToken) {
+        console.log('No push/FCM token found for user:', toUserId);
+        // Still create notification in database even if no push token
       }
 
       // Create notification in database
@@ -439,17 +492,19 @@ class NotificationService {
         }
       });
 
-      // Send push notification
-      await this.sendPushNotification(
-        toUserId,
-        'Breakup Accepted',
-        `${acceptedBy} has accepted the breakup request`,
-        {
-          type: 'breakup_accepted',
-          fromUserId,
-          acceptedBy
-        }
-      );
+      // Send push notification only if token exists
+      if (fcmToken) {
+        await this.sendPushNotification(
+          toUserId,
+          'Breakup Accepted',
+          `${acceptedBy} has accepted the breakup request`,
+          {
+            type: 'breakup_accepted',
+            fromUserId,
+            acceptedBy
+          }
+        );
+      }
 
       console.log('Breakup accepted notification sent to user:', toUserId);
     } catch (error) {
@@ -464,10 +519,20 @@ class NotificationService {
     rejectedBy: string
   ) {
     try {
-      const user = await User.findById(toUserId);
-      if (!user?.pushToken) {
-        console.log('No push token found for user:', toUserId);
-        return;
+      // ⚠️ FIX: Check both currentDeviceInfo.fcmToken and pushToken
+      const user = await User.findById(toUserId).select('pushToken currentDeviceInfo');
+      
+      // Try to get token from currentDeviceInfo first (new location)
+      let fcmToken = user?.currentDeviceInfo?.fcmToken;
+      
+      // Fallback to pushToken (old location) for backward compatibility
+      if (!fcmToken) {
+        fcmToken = user?.pushToken;
+      }
+      
+      if (!fcmToken) {
+        console.log('No push/FCM token found for user:', toUserId);
+        // Still create notification in database even if no push token
       }
 
       // Create notification in database
@@ -483,17 +548,19 @@ class NotificationService {
         }
       });
 
-      // Send push notification
-      await this.sendPushNotification(
-        toUserId,
-        'Breakup Request Rejected',
-        `${rejectedBy} has rejected your breakup request. Relationship continues.`,
-        {
-          type: 'breakup_rejected',
-          fromUserId,
-          rejectedBy
-        }
-      );
+      // Send push notification only if token exists
+      if (fcmToken) {
+        await this.sendPushNotification(
+          toUserId,
+          'Breakup Request Rejected',
+          `${rejectedBy} has rejected your breakup request. Relationship continues.`,
+          {
+            type: 'breakup_rejected',
+            fromUserId,
+            rejectedBy
+          }
+        );
+      }
 
       console.log('Breakup rejected notification sent to user:', toUserId);
     } catch (error) {

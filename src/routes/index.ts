@@ -16,6 +16,7 @@ import locationRoutes from './location';
 import profileRoutes from './profile';
 import nicknameRoutes from './nickname';
 import monitoringRoutes from './monitoring';
+import adminRoutes from './admin';
 import { securityMiddleware, securityHeaders } from '@/middleware/security';
 
 const router = Router();
@@ -53,5 +54,6 @@ router.use('/location', locationRoutes);
 router.use('/profile', profileRoutes);
 router.use('/nicknames', nicknameRoutes);
 router.use('/monitoring', monitoringRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;

@@ -124,6 +124,14 @@ export class SessionService {
       $push: { loginHistory: loginHistoryEntry },
       updatedAt: new Date(),
     });
+    
+    // ⚠️ FIX: Also save to pushToken for backward compatibility
+    if (newDeviceInfo.fcmToken) {
+      await User.findByIdAndUpdate(user._id, {
+        pushToken: newDeviceInfo.fcmToken
+      });
+      console.log('✅ FCM token saved for user:', user._id, 'Token:', newDeviceInfo.fcmToken.substring(0, 30) + '...');
+    }
 
     // Get createdAt - fallback to updatedAt if createdAt doesn't exist (for older users)
     const createdAt = user.createdAt || user.updatedAt || new Date();

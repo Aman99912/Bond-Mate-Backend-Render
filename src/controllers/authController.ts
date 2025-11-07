@@ -5,6 +5,7 @@ import { generateToken } from '@/utils/jwt';
 import { hashPassword, comparePassword } from '@/utils/hash';
 import User from '@/models/User';
 import { SessionService } from '@/services/sessionService';
+import { body } from 'express-validator';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const { 
@@ -132,6 +133,15 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     return res.status(409).json(response);
   }
 
+  // ⚠️ FIX: Log FCM token reception for debugging
+  console.log('📥 Login request received:', {
+    email: email,
+    hasFcmToken: !!fcmToken,
+    fcmTokenPreview: fcmToken ? fcmToken.substring(0, 30) + '...' : 'missing',
+    deviceId: deviceId,
+    platform: platform
+  });
+
   // Proceed with login (either no conflict or force logout is true)
   const deviceInfo = {
     deviceId: deviceId || 'unknown',
@@ -139,6 +149,12 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     platform: platform || 'web', // Default to 'web' instead of 'unknown'
     fcmToken: fcmToken,
   };
+  
+  if (fcmToken) {
+    console.log('✅ FCM token received, will be saved to currentDeviceInfo.fcmToken');
+  } else {
+    console.warn('⚠️ No FCM token received in login request - notifications may not work');
+  }
 
   // If there's a conflict and forceLogout is true, clear all existing sessions first
   if (sessionConflict.hasConflict && forceLogout) {
@@ -915,6 +931,72 @@ export const logoutFromAllDevices = asyncHandler(async (req: Request, res: Respo
   const response: ApiResponse = {
     success: true,
     message: 'Logged out from all devices successfully',
+  };
+
+  res.json(response);
+});
+
+// Check if email already exists
+export const checkEmailExists = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body;
+  const currentUserId = (req as any).user?.userId; // For edit profile - exclude current user
+
+  if (!email) {
+    throw new AppError('Email is required', 400);
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new AppError('Invalid email format', 400);
+  }
+
+  // Check if email exists
+  const existingUser = await User.findOne({ 
+    email: email.toLowerCase().trim(),
+    ...(currentUserId ? { _id: { $ne: currentUserId } } : {}) // Exclude current user if editing profile
+  });
+
+  const response: ApiResponse = {
+    success: true,
+    message: existingUser ? 'Email already exists' : 'Email is available',
+    data: {
+      exists: !!existingUser,
+      available: !existingUser
+    }
+  };
+
+  res.json(response);
+});
+
+// Check if mobile number already exists
+export const checkMobileNumberExists = asyncHandler(async (req: Request, res: Response) => {
+  const { mobileNumber } = req.body;
+  const currentUserId = (req as any).user?.userId; // For edit profile - exclude current user
+
+  if (!mobileNumber) {
+    throw new AppError('Mobile number is required', 400);
+  }
+
+  // Validate mobile number format (10 digits)
+  const phoneRegex = /^\d{10}$/;
+  if (!phoneRegex.test(mobileNumber)) {
+    throw new AppError('Invalid mobile number format. Please enter 10 digits', 400);
+  }
+
+  // Check if mobile number exists
+  const existingUser = await User.findOne({ 
+    mobileNumber: mobileNumber.trim(),
+    ...(currentUserId ? { _id: { $ne: currentUserId } } : {}) // Exclude current user if editing profile
+  });
+
+  const response: ApiResponse = {
+    success: true,
+    message: existingUser ? 'Mobile number already exists' : 'Mobile number is available',
+    data: {
+      exists: !!existingUser,
+      available: !existingUser
+    }
   };
 
   res.json(response);

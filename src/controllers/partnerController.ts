@@ -216,6 +216,16 @@ export const sendPartnerRequest = asyncHandler(async (req: Request, res: Respons
     throw new AppError('This user already has a partner', 400);
   }
 
+  // ⚠️ FIX: Clean up stale Partner documents BEFORE creating new request
+  // This prevents validation errors when User.partners is empty but Partner doc exists
+  await Partner.deleteMany({
+    $or: [
+      { user1Id: fromUserId, user2Id: toUserId },
+      { user1Id: toUserId, user2Id: fromUserId }
+    ]
+  });
+  console.log('✅ Cleaned up stale Partner documents before creating new request');
+
   // Check for ANY existing requests between these users (pending, accepted, or rejected)
   // This prevents bugs where old 'accepted' requests cause state confusion after unfriend
   const existingRequests = await PartnerRequest.find({
@@ -505,7 +515,7 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
       }
     });
     
-    // Remove from pendingRequests arrays
+    // ⚠️ FIX: Remove from pendingRequests arrays (cleanup)
     await User.findByIdAndUpdate(pendingRequest.fromUserId, {
       $pull: { pendingRequests: { requestId: requestId } }
     });
@@ -513,6 +523,20 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
     await User.findByIdAndUpdate(userId, {
       $pull: { pendingRequests: { requestId: requestId } }
     });
+    
+    // ⚠️ FIX: Also update PartnerRequest collection status if it exists
+    try {
+      const partnerRequestDoc = await PartnerRequest.findOne({
+        _id: requestId
+      });
+      if (partnerRequestDoc && partnerRequestDoc.status === 'pending') {
+        partnerRequestDoc.status = 'accepted';
+        await partnerRequestDoc.save();
+      }
+    } catch (error) {
+      // Ignore if PartnerRequest doc doesn't exist (custom ID case)
+      console.log('PartnerRequest doc not found or already updated');
+    }
     
     // Add history
     await PartnerHistory.create([{
@@ -613,13 +637,54 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
     throw new AppError('User not found', 404);
   }
 
+  // ⚠️ FIX: Use MongoDB transaction for atomic operations (if replica set available)
+  // Also cleanup stale Partner documents before creating new one
+  let session: mongoose.ClientSession | null = null;
+  let useTransaction = false;
+  
+  // Try to detect if MongoDB supports transactions
+  // For standalone MongoDB, transactions are not supported - skip transaction logic entirely
+  // Simple approach: Try to start transaction, if it fails, proceed without it
+  try {
+    session = await mongoose.startSession();
+    // Try to start transaction - this will throw error if not replica set
+    session.startTransaction();
+    // Test transaction by doing a simple read query
+    await User.findOne({}).session(session).limit(1);
+    // Transaction works - we can use it
+    useTransaction = true;
+    console.log('✅ Using MongoDB transaction for atomic operations');
+  } catch (transactionError: any) {
+    // Transaction not supported - standalone mode
+    const currentSession = session;
+    if (currentSession) {
+      try {
+        if ((currentSession as any).inTransaction && (currentSession as any).inTransaction()) {
+          await (currentSession as any).abortTransaction();
+        }
+      } catch (e) {
+        // Ignore abort errors
+      }
+      try {
+        (currentSession as any).endSession();
+      } catch (e) {
+        // Ignore end session errors
+      }
+    }
+    session = null;
+    useTransaction = false;
+    console.log('⚠️ MongoDB transaction not available (standalone mode), proceeding without transaction');
+  }
+  
   try {
     // 🔄 CHECK FOR PREVIOUS RELATIONSHIP - 30 DAY RESTORATION LOGIC
     const FROM_USER_ID = request.fromUserId;
     const TO_USER_ID = request.toUserId;
     
     // Check if they have a previous relationship in exPartners
-    const fromUserData = await User.findById(FROM_USER_ID).select('exPartners');
+    const fromUserData = useTransaction && session 
+      ? await User.findById(FROM_USER_ID).select('exPartners').session(session)
+      : await User.findById(FROM_USER_ID).select('exPartners');
     const previousRelationship = fromUserData?.exPartners?.find(
       (ex: any) => ex.partnerId === TO_USER_ID
     );
@@ -642,39 +707,64 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
         await User.findByIdAndUpdate(FROM_USER_ID, {
           $set: { 'exPartners.$[elem].dataArchived': true }
         }, {
-          arrayFilters: [{ 'elem.partnerId': TO_USER_ID }]
+          arrayFilters: [{ 'elem.partnerId': TO_USER_ID }],
+          ...(useTransaction && session ? { session } : {})
         });
         
         await User.findByIdAndUpdate(TO_USER_ID, {
           $set: { 'exPartners.$[elem].dataArchived': true }
         }, {
-          arrayFilters: [{ 'elem.partnerId': FROM_USER_ID }]
+          arrayFilters: [{ 'elem.partnerId': FROM_USER_ID }],
+          ...(useTransaction && session ? { session } : {})
         });
         
         console.log('🆕 NEW START: Data will be fresh (over 30 days)');
       }
     }
     
+    // ⚠️ CRITICAL FIX: Clean up any stale Partner documents between these users
+    // This prevents validation errors when User.partners is empty but Partner doc exists
+    const deleteQuery = Partner.deleteMany({
+      $or: [
+        { user1Id: FROM_USER_ID, user2Id: TO_USER_ID },
+        { user1Id: TO_USER_ID, user2Id: FROM_USER_ID }
+      ]
+    });
+    if (useTransaction && session) {
+      await deleteQuery.session(session);
+    } else {
+      await deleteQuery;
+    }
+    console.log('✅ Cleaned up stale Partner documents');
+    
     // Update request status
     request.status = 'accepted';
-    await request.save();
+    if (useTransaction && session) {
+      await request.save({ session });
+    } else {
+      await request.save();
+    }
 
     // Create partner relationship
-    const partner = await Partner.create([{
+    const partnerData = [{
       user1Id: request.fromUserId,
       user2Id: request.toUserId,
       status: 'active',
       startedAt: shouldRestoreData && restoredFromDate ? restoredFromDate : new Date()
-    }]);
+    }];
+    const partner = useTransaction && session 
+      ? await Partner.create(partnerData, { session })
+      : await Partner.create(partnerData);
 
     console.log('Partner relationship created:', partner);
 
-    // Update both users with partner information
+    // Update both users with partner information (within transaction)
     const startedAt = shouldRestoreData && restoredFromDate ? restoredFromDate : new Date();
     const toUserAge = toUser?.dob ? Math.floor((Date.now() - new Date(toUser.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : undefined;
     const fromUserAge = fromUser?.dob ? Math.floor((Date.now() - new Date(fromUser.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : undefined;
     
     // Add to partners array for both users
+    const updateOptions = useTransaction && session ? { session } : {};
     await User.findByIdAndUpdate(request.fromUserId, {
       $push: {
         partners: {
@@ -688,7 +778,7 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
           status: 'active'
         }
       }
-    });
+    }, updateOptions);
 
     await User.findByIdAndUpdate(request.toUserId, {
       $push: {
@@ -703,24 +793,34 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
           status: 'active'
         }
       }
-    });
+    }, updateOptions);
 
     // Remove from pendingRequests array of both users
     await User.findByIdAndUpdate(request.fromUserId, {
       $pull: {
         pendingRequests: { requestId: requestId }
       }
-    });
+    }, updateOptions);
 
     await User.findByIdAndUpdate(request.toUserId, {
       $pull: {
         pendingRequests: { requestId: requestId }
       }
-    });
+    }, updateOptions);
 
     console.log('Users updated with partner information');
 
-    // Add to history
+    // Commit transaction before external operations (notifications, etc.)
+    if (useTransaction && session && session.inTransaction()) {
+      await session.commitTransaction();
+      session.endSession();
+      console.log('✅ Transaction committed successfully');
+    } else if (session) {
+      session.endSession();
+      console.log('✅ Operations completed successfully (no transaction)');
+    }
+
+    // Add to history (after transaction)
     await PartnerHistory.create([{
       userId: request.fromUserId,
       partnerId: request.toUserId,
@@ -801,7 +901,32 @@ export const acceptPartnerRequest = asyncHandler(async (req: Request, res: Respo
       }
     });
   } catch (error) {
+    // ⚠️ FIX: Rollback transaction on error
+    if (session && session.inTransaction()) {
+      try {
+        await session.abortTransaction();
+        session.endSession();
+        console.error('❌ Transaction aborted due to error');
+      } catch (abortError) {
+        console.error('Error aborting transaction:', abortError);
+        if (session) session.endSession();
+      }
+    } else if (session) {
+      session.endSession();
+    }
+    
     console.error('Error in acceptPartnerRequest:', error);
+    
+    // ⚠️ FIX: Don't change request status on error
+    // Status should remain 'pending' if operation fails
+    if (request && request.status === 'accepted') {
+      try {
+        await PartnerRequest.findByIdAndUpdate(request._id, { status: 'pending' });
+        console.log('✅ Reverted request status to pending after error');
+      } catch (revertError) {
+        console.error('Error reverting request status:', revertError);
+      }
+    }
     
     // Provide more specific error message
     if (error instanceof Error) {
@@ -852,12 +977,26 @@ export const rejectPartnerRequest = asyncHandler(async (req: Request, res: Respo
       arrayFilters: [{ 'elem.requestId': requestId }]
     });
     
-    // Remove from sender's pendingRequests as well
+    // ⚠️ FIX: Remove from sender's pendingRequests as well (cleanup)
     await User.findByIdAndUpdate(pendingRequest.fromUserId, {
       $pull: {
         pendingRequests: { requestId: requestId }
       }
     });
+    
+    // ⚠️ FIX: Also update PartnerRequest collection status if it exists
+    try {
+      const partnerRequestDoc = await PartnerRequest.findOne({
+        _id: requestId
+      });
+      if (partnerRequestDoc && partnerRequestDoc.status === 'pending') {
+        partnerRequestDoc.status = 'rejected';
+        await partnerRequestDoc.save();
+      }
+    } catch (error) {
+      // Ignore if PartnerRequest doc doesn't exist (custom ID case)
+      console.log('PartnerRequest doc not found or already updated');
+    }
     
     // Create history
     await PartnerHistory.create([{
@@ -930,23 +1069,77 @@ export const rejectPartnerRequest = asyncHandler(async (req: Request, res: Respo
     throw new AppError('User not found', 404);
   }
 
+  // ⚠️ FIX: Use MongoDB transaction for atomic operations (if replica set available)
+  let session: mongoose.ClientSession | null = null;
+  let useTransaction = false;
+  
+  // Try to detect if MongoDB supports transactions
+  // For standalone MongoDB, transactions are not supported - skip transaction logic entirely
+  // Simple approach: Try to start transaction, if it fails, proceed without it
   try {
+    session = await mongoose.startSession();
+    // Try to start transaction - this will throw error if not replica set
+    session.startTransaction();
+    // Test transaction by doing a simple read query
+    await User.findOne({}).session(session).limit(1);
+    // Transaction works - we can use it
+    useTransaction = true;
+    console.log('✅ Using MongoDB transaction for reject operation');
+  } catch (transactionError: any) {
+    // Transaction not supported - standalone mode
+    const currentSession = session;
+    if (currentSession) {
+      try {
+        if ((currentSession as any).inTransaction && (currentSession as any).inTransaction()) {
+          await (currentSession as any).abortTransaction();
+        }
+      } catch (e) {
+        // Ignore abort errors
+      }
+      try {
+        (currentSession as any).endSession();
+      } catch (e) {
+        // Ignore end session errors
+      }
+    }
+    session = null;
+    useTransaction = false;
+    console.log('⚠️ MongoDB transaction not available (standalone mode), proceeding without transaction');
+  }
+  
+  try {
+    
     // Update request status
     request.status = 'rejected';
-    await request.save();
+    const updateOptions = useTransaction && session ? { session } : {};
+    if (useTransaction && session) {
+      await request.save({ session });
+    } else {
+      await request.save();
+    }
 
     // Remove from pendingRequests array of both users
     await User.findByIdAndUpdate(request.fromUserId, {
       $pull: {
         pendingRequests: { requestId: requestId }
       }
-    });
+    }, updateOptions);
 
     await User.findByIdAndUpdate(request.toUserId, {
       $pull: {
         pendingRequests: { requestId: requestId }
       }
-    });
+    }, updateOptions);
+    
+    // Commit transaction before external operations
+    if (useTransaction && session && session.inTransaction()) {
+      await session.commitTransaction();
+      session.endSession();
+      console.log('✅ Transaction committed successfully for reject');
+    } else if (session) {
+      session.endSession();
+      console.log('✅ Reject operation completed successfully (no transaction)');
+    }
 
     console.log('Request removed from pendingRequests arrays');
 
@@ -1012,7 +1205,31 @@ export const rejectPartnerRequest = asyncHandler(async (req: Request, res: Respo
       }
     });
   } catch (error) {
+    // ⚠️ FIX: Rollback transaction on error
+    if (session && session.inTransaction()) {
+      try {
+        await session.abortTransaction();
+        session.endSession();
+        console.error('❌ Transaction aborted due to error in reject');
+      } catch (abortError) {
+        console.error('Error aborting transaction:', abortError);
+        if (session) session.endSession();
+      }
+    } else if (session) {
+      session.endSession();
+    }
+    
     console.error('Error in rejectPartnerRequest:', error);
+    
+    // ⚠️ FIX: Don't change request status on error
+    if (request && request.status === 'rejected') {
+      try {
+        await PartnerRequest.findByIdAndUpdate(request._id, { status: 'pending' });
+        console.log('✅ Reverted request status to pending after error');
+      } catch (revertError) {
+        console.error('Error reverting request status:', revertError);
+      }
+    }
     
     // Provide more specific error message
     if (error instanceof Error) {
@@ -1223,18 +1440,9 @@ export const removePartner = asyncHandler(async (req: Request, res: Response) =>
       });
       console.log('Socket notification sent to user:', partnerId);
       
-      // Also emit partner_removed event to trigger UI refresh
-      socketHandler.emitToUser(partnerId, 'partner_removed', {
-        userId: userId!,
-        partnerName: currentUser.name,
-        timestamp: endedAt
-      });
-      
-      socketHandler.emitToUser(userId!, 'partner_removed', {
-        userId: partnerId,
-        partnerName: partnerUser.name,
-        timestamp: endedAt
-      });
+      // ⚠️ FIX: DON'T emit partner_removed here - breakup request is pending, not accepted yet
+      // Partner data should remain visible until breakup is actually accepted
+      // Only emit partner_removed in acceptBreakup function when breakup is confirmed
     }
 
     res.json({
