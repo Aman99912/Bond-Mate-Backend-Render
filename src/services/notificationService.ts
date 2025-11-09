@@ -2,6 +2,7 @@ import axios from 'axios';
 import admin from 'firebase-admin';
 import Notification from '@/models/Notification';
 import User from '@/models/User';
+import { getFirebaseMessaging } from '@/config/firebaseAdmin';
 
 interface NotificationData {
   userId: string;
@@ -15,6 +16,12 @@ interface FirebaseNotificationData {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+}
+
+interface RegisterDeviceTokenOptions {
+  deviceId?: string;
+  deviceName?: string;
+  platform?: string;
 }
 
 class NotificationService {
@@ -46,6 +53,61 @@ class NotificationService {
       return notification;
     } catch (error) {
       console.error('Error creating notification:', error);
+      throw error;
+    }
+  }
+
+  public async registerDeviceToken(
+    userId: string,
+    token: string,
+    options: RegisterDeviceTokenOptions = {}
+  ) {
+    try {
+      const user = await User.findById(userId).select('currentDeviceInfo currentDeviceId');
+
+      if (!user) {
+        console.warn(`❌ Unable to register device token. User not found: ${userId}`);
+        return { updated: false };
+      }
+
+      const rawDeviceInfo =
+        user.currentDeviceInfo && typeof (user.currentDeviceInfo as any).toObject === 'function'
+          ? (user.currentDeviceInfo as any).toObject()
+          : user.currentDeviceInfo || {};
+
+      const updatedDeviceInfo = {
+        ...rawDeviceInfo,
+        ...(options.deviceId ? { deviceId: options.deviceId } : {}),
+        ...(options.deviceName ? { deviceName: options.deviceName } : {}),
+        ...(options.platform ? { platform: options.platform } : {}),
+        fcmToken: token,
+        lastLoginAt: new Date(),
+      };
+
+      const updatePayload: Record<string, unknown> = {
+        pushToken: token,
+        currentDeviceInfo: updatedDeviceInfo,
+        updatedAt: new Date(),
+      };
+
+      if (options.deviceId) {
+        updatePayload.currentDeviceId = options.deviceId;
+      } else if (!user.currentDeviceId && updatedDeviceInfo.deviceId) {
+        updatePayload.currentDeviceId = updatedDeviceInfo.deviceId;
+      }
+
+      await User.findByIdAndUpdate(userId, updatePayload);
+
+      console.log('✅ Device token registered for user:', userId, token.substring(0, 30) + '...');
+
+      return {
+        updated: true,
+        tokenPreview: token.substring(0, 30) + '...',
+        deviceId: updatedDeviceInfo.deviceId,
+        platform: updatedDeviceInfo.platform,
+      };
+    } catch (error) {
+      console.error('❌ Error registering device token:', error);
       throw error;
     }
   }
@@ -122,14 +184,13 @@ class NotificationService {
   // Send Firebase notification
   public async sendFirebaseNotification(fcmToken: string, notificationData: FirebaseNotificationData) {
     try {
-      if (!admin.apps.length) {
-        // Initialize Firebase Admin if not already initialized
-        admin.initializeApp({
-          credential: admin.credential.applicationDefault(),
-        });
+      const messaging = getFirebaseMessaging();
+      if (!messaging) {
+        console.warn('⚠️  Firebase messaging is not configured. Skipping push notification send.');
+        return false;
       }
 
-      const message = {
+      const message: admin.messaging.Message = {
         token: fcmToken,
         notification: {
           title: notificationData.title,
@@ -145,7 +206,6 @@ class NotificationService {
             sound: 'default',
             priority: 'high' as const,
             channelId: 'default',
-            vibrate: [200, 100, 200],
           },
         },
         apns: {

@@ -21,6 +21,37 @@ export const getUserNotifications = asyncHandler(async (req: Request, res: Respo
   });
 });
 
+// Register device token for push notifications
+export const registerNotificationToken = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  const { token, deviceId, deviceName, platform } = req.body as {
+    token?: string;
+    deviceId?: string;
+    deviceName?: string;
+    platform?: string;
+  };
+
+  if (!userId) {
+    throw new AppError('Authentication required', 401);
+  }
+
+  if (!token || typeof token !== 'string') {
+    throw new AppError('FCM token is required', 400);
+  }
+
+  const result = await NotificationService.registerDeviceToken(userId, token, {
+    deviceId,
+    deviceName,
+    platform,
+  });
+
+  res.json({
+    success: true,
+    message: 'Notification token registered successfully',
+    data: result,
+  });
+});
+
 // Mark notification as read
 export const markAsRead = asyncHandler(async (req: Request, res: Response) => {
   const { notificationId } = req.params;
