@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler, AppError } from '@/middleware/errorHandler';
 import { getSocketHandler } from '@/socket/socketHandler';
+import LocationModel from '@/models/Location';
 
 // Update user's current location
 export const updateLocation = asyncHandler(async (req: Request, res: Response) => {
@@ -12,17 +13,24 @@ export const updateLocation = asyncHandler(async (req: Request, res: Response) =
 
   const { latitude, longitude, accuracy } = req.body;
 
-  if (!latitude || !longitude) {
-    throw new AppError('Latitude and longitude are required', 400);
+  const numericLatitude = Number(latitude);
+  const numericLongitude = Number(longitude);
+  const numericAccuracy = accuracy !== undefined && accuracy !== null ? Number(accuracy) : undefined;
+
+  if (!Number.isFinite(numericLatitude) || !Number.isFinite(numericLongitude)) {
+    throw new AppError('Latitude and longitude are required and must be valid numbers', 400);
   }
 
-  // Validate coordinates
-  if (latitude < -90 || latitude > 90) {
+  if (numericLatitude < -90 || numericLatitude > 90) {
     throw new AppError('Invalid latitude. Must be between -90 and 90', 400);
   }
 
-  if (longitude < -180 || longitude > 180) {
+  if (numericLongitude < -180 || numericLongitude > 180) {
     throw new AppError('Invalid longitude. Must be between -180 and 180', 400);
+  }
+
+  if (numericAccuracy !== undefined && (!Number.isFinite(numericAccuracy) || numericAccuracy < 0)) {
+    throw new AppError('Accuracy must be a positive number', 400);
   }
 
   // Get user's partner
@@ -43,13 +51,30 @@ export const updateLocation = asyncHandler(async (req: Request, res: Response) =
   const partnerId = activePartner.partnerId;
 
   // Update user's last known location
+  const updatedAt = new Date();
+
   user.lastLocation = {
-    latitude,
-    longitude,
-    accuracy: accuracy || null,
-    updatedAt: new Date()
+    latitude: numericLatitude,
+    longitude: numericLongitude,
+    accuracy: numericAccuracy,
+    updatedAt,
   };
   await user.save();
+
+  await LocationModel.findOneAndUpdate(
+    { userId: userId },
+    {
+      latitude: numericLatitude,
+      longitude: numericLongitude,
+      accuracy: numericAccuracy,
+      updatedAt,
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    }
+  );
 
   // Send location update to partner via socket
   const socketHandler = getSocketHandler();
@@ -57,10 +82,10 @@ export const updateLocation = asyncHandler(async (req: Request, res: Response) =
     socketHandler.emitToUser(partnerId, 'partner_location_update', {
       userId: userId,
       userName: user.name,
-      latitude,
-      longitude,
-      accuracy,
-      timestamp: Date.now()
+      latitude: numericLatitude,
+      longitude: numericLongitude,
+      accuracy: numericAccuracy,
+      timestamp: updatedAt.getTime()
     });
   }
 
@@ -68,9 +93,9 @@ export const updateLocation = asyncHandler(async (req: Request, res: Response) =
     success: true,
     message: 'Location updated successfully',
     data: {
-      latitude,
-      longitude,
-      accuracy,
+      latitude: numericLatitude,
+      longitude: numericLongitude,
+      accuracy: numericAccuracy,
       updatedAt: user.lastLocation.updatedAt
     }
   });
@@ -102,18 +127,30 @@ export const getPartnerLocation = asyncHandler(async (req: Request, res: Respons
   const partnerId = activePartner.partnerId;
 
   // Get partner's information
-  const partner = await User.findById(partnerId).select('name lastLocation');
-  
+  const [partner, partnerLocation] = await Promise.all([
+    User.findById(partnerId).select('name'),
+    LocationModel.findOne({ userId: partnerId }),
+  ]);
+
   if (!partner) {
     throw new AppError('Partner not found', 404);
   }
+
+  const partnerLastLocation = partnerLocation
+    ? {
+        latitude: partnerLocation.latitude,
+        longitude: partnerLocation.longitude,
+        accuracy: partnerLocation.accuracy,
+        updatedAt: partnerLocation.updatedAt,
+      }
+    : null;
 
   res.json({
     success: true,
     data: {
       partnerId: partner._id,
       partnerName: partner.name,
-      location: partner.lastLocation || null,
+      location: partnerLastLocation,
       isOnline: false // This would be determined by socket connection status
     }
   });
@@ -145,17 +182,39 @@ export const getBothLocations = asyncHandler(async (req: Request, res: Response)
   const partnerId = activePartner.partnerId;
 
   // Get partner's information
-  const partner = await User.findById(partnerId).select('name lastLocation');
-  
+  const [partner, myLocation, partnerLocation] = await Promise.all([
+    User.findById(partnerId).select('name'),
+    LocationModel.findOne({ userId: userId }),
+    LocationModel.findOne({ userId: partnerId }),
+  ]);
+
   if (!partner) {
     throw new AppError('Partner not found', 404);
   }
 
+  const formattedMyLocation = myLocation
+    ? {
+        latitude: myLocation.latitude,
+        longitude: myLocation.longitude,
+        accuracy: myLocation.accuracy,
+        updatedAt: myLocation.updatedAt,
+      }
+    : user.lastLocation || null;
+
+  const formattedPartnerLocation = partnerLocation
+    ? {
+        latitude: partnerLocation.latitude,
+        longitude: partnerLocation.longitude,
+        accuracy: partnerLocation.accuracy,
+        updatedAt: partnerLocation.updatedAt,
+      }
+    : partner.lastLocation || null;
+
   res.json({
     success: true,
     data: {
-      myLocation: user.lastLocation || null,
-      partnerLocation: partner.lastLocation || null,
+      myLocation: formattedMyLocation,
+      partnerLocation: formattedPartnerLocation,
       partnerName: partner.name
     }
   });
