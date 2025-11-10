@@ -157,8 +157,8 @@ const MessageSchema = new Schema<IMessage>({
   timestamps: true
 });
 
-// Index for efficient queries
-MessageSchema.index({ chatId: 1, createdAt: -1 });
+// Index for efficient queries (supports cursor pagination on createdAt + _id)
+MessageSchema.index({ chatId: 1, createdAt: -1, _id: -1 });
 MessageSchema.index({ senderId: 1 });
 MessageSchema.index({ isOneView: 1, viewedBy: 1 });
 MessageSchema.index({ 'reactions.userId': 1 });

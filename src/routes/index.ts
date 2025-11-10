@@ -4,6 +4,7 @@ import otpRoutes from './otp';
 import partnerRoutes from './partner';
 import enhancedPartnerRoutes from './enhancedPartner';
 import chatRoutes from './chat';
+import chatMessagesRoutes from './chatMessages';
 import stickerRoutes from './sticker';
 import notificationRoutes from './notifications';
 import dashboardRoutes from './dashboard';
@@ -42,6 +43,7 @@ router.use('/otp', otpRoutes);
 router.use('/partners', partnerRoutes); // Keep original for backward compatibility
 router.use('/enhanced-partners', enhancedPartnerRoutes); // New enhanced routes
 router.use('/chat', chatRoutes);
+router.use('/chats', chatMessagesRoutes);
 router.use('/stickers', stickerRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/dashboard', dashboardRoutes);

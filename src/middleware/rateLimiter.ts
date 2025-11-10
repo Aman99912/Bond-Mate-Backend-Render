@@ -14,7 +14,7 @@ export const createRateLimiter = (config: {
   skipFailedRequests?: boolean;
   keyGenerator?: (req: Request) => string;
 }) => {
-  return rateLimit({
+  const options: any = {
     windowMs: config.windowMs,
     max: config.max,
     message: config.message || 'Too many requests, please try again later',
@@ -22,7 +22,6 @@ export const createRateLimiter = (config: {
     legacyHeaders: false,
     skipSuccessfulRequests: config.skipSuccessfulRequests || false,
     skipFailedRequests: config.skipFailedRequests || false,
-    keyGenerator: config.keyGenerator || ((req: Request) => req.ip || 'unknown'),
     handler: async (req: Request, res: Response) => {
       const userId = (req as any).user?.userId || (req as any).user?.id;
       
@@ -55,7 +54,13 @@ export const createRateLimiter = (config: {
         retryAfter: Math.ceil(config.windowMs / 1000)
       });
     }
-  });
+  };
+
+  if (config.keyGenerator) {
+    options.keyGenerator = config.keyGenerator;
+  }
+
+  return rateLimit(options);
 };
 
 // Predefined rate limiters for different endpoints

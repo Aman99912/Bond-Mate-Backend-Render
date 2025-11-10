@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { asyncHandler, AppError } from '@/middleware/errorHandler';
 import Chat from '@/models/Chat';
-import Message from '@/models/Message';
+import Message, { IMessage } from '@/models/Message';
 import User from '@/models/User';
 import Notification from '@/models/Notification';
 import { getSocketHandler } from '@/socket/socketHandler';
+import { decodeMessageCursor, encodeMessageCursor } from '@/utils/cursor';
+import { FilterQuery, Types } from 'mongoose';
 
 // Get or create chat with current partner
 export const getCurrentPartnerChat = asyncHandler(async (req: Request, res: Response) => {
@@ -98,53 +100,186 @@ export const getOrCreateChat = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
-// Get chat messages
+// Get chat messages (cursor-based pagination)
 export const getChatMessages = asyncHandler(async (req: Request, res: Response) => {
   const { chatId } = req.params;
-  const { page = 1, limit = 50 } = req.query;
+  const { limit: limitQuery, cursor } = req.query as { limit?: string; cursor?: string };
   const userId = req.user?.userId;
 
-  const chat = await Chat.findById(chatId);
+  if (!Types.ObjectId.isValid(chatId)) {
+    throw new AppError('Invalid chat ID', 400);
+  }
+
+  const chat = await Chat.findById(chatId).select('participants');
   if (!chat) {
     throw new AppError('Chat not found', 404);
   }
 
   // Check if user is participant
-  if (!userId || !chat.participants.some(p => p.toString() === userId)) {
+  if (!userId || !chat.participants.some((participant) => participant.toString() === userId)) {
     throw new AppError('Access denied', 403);
   }
 
-  const skip = (Number(page) - 1) * Number(limit);
+  const limitNumber = Math.min(Math.max(Number(limitQuery) || 20, 1), 100);
 
-  // Filter out messages deleted for this user
-  const messages = await Message.find({
-    chatId,
-    isDeleted: false,
+  const filters: FilterQuery<IMessage>[] = [
+    { chatId: new Types.ObjectId(chatId) },
+    { isDeleted: false },
+    {
+      $or: [
+        { deletedFor: { $ne: new Types.ObjectId(userId) } },
+        { deletedFor: { $exists: false } },
+      ],
+    },
+  ];
+
+  if (cursor) {
+    const { createdAt, id } = decodeMessageCursor(cursor);
+    const cursorDate = new Date(createdAt);
+
+    filters.push({
     $or: [
-      { deletedFor: { $ne: userId } }, // Not in deletedFor array
-      { deletedFor: { $exists: false } } // Or deletedFor doesn't exist
-    ]
-  })
+        { createdAt: { $lt: cursorDate } },
+        {
+          createdAt: cursorDate,
+          _id: { $lt: new Types.ObjectId(id) },
+        },
+      ],
+    });
+  }
+
+  const messages = await Message.find({ $and: filters })
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(limitNumber + 1)
     .populate('senderId', 'name avatar')
     .populate({
       path: 'replyTo',
-      select: 'content type senderId fileUrl',
+      select: 'content type senderId fileUrl thumbnailUrl mimeType',
       populate: {
         path: 'senderId',
-        select: 'name avatar'
+        select: 'name avatar',
+      },
+    });
+
+  const hasMore = messages.length > limitNumber;
+  const trimmed = hasMore ? messages.slice(0, limitNumber) : messages;
+  const ordered = trimmed.reverse();
+
+  const normalizeSender = (sender: any) => {
+    if (!sender) {
+      return sender;
+    }
+
+    if (typeof sender === 'object' && sender._id) {
+      return {
+        _id: sender._id.toString(),
+        name: sender.name,
+        avatar: sender.avatar,
+      };
+    }
+
+    return sender.toString();
+  };
+
+  const normalizeReply = (reply: any) => {
+    if (!reply) {
+      return reply;
+    }
+
+    if (typeof reply === 'object' && reply._id) {
+      return {
+        ...reply,
+        _id: reply._id.toString(),
+        senderId: normalizeSender(reply.senderId),
+      };
+    }
+
+    return reply.toString();
+  };
+
+  const normalizeObjectIdArray = (values?: Array<Types.ObjectId | string>) =>
+    values?.map((value) => value.toString());
+
+  const normalizeReactions = (reactions?: Array<{ userId: any; emoji: string }>) => {
+    if (!reactions) {
+      return reactions;
+    }
+
+    return reactions.map((reaction) => {
+      const { userId } = reaction;
+      let normalizedUserId: string;
+
+      if (!userId) {
+        normalizedUserId = '';
+      } else if (typeof userId === 'string') {
+        normalizedUserId = userId;
+      } else if (typeof userId === 'object' && 'toString' in userId) {
+        normalizedUserId = (userId as Types.ObjectId).toString();
+      } else if (typeof userId === 'object' && '_id' in userId) {
+        normalizedUserId = (userId as { _id: Types.ObjectId })._id.toString();
+      } else {
+        normalizedUserId = String(userId);
       }
-    })
-    .sort({ createdAt: -1 })
-    .limit(Number(limit))
-    .skip(skip);
+
+      return {
+        emoji: reaction.emoji,
+        userId: normalizedUserId,
+      };
+    });
+  };
+
+  const responseMessages = ordered.map((message) => {
+    const plain = message.toObject<IMessage>();
+
+    return {
+      _id: message.id,
+      chatId: message.chatId.toString(),
+      senderId: normalizeSender(plain.senderId),
+      content: plain.content,
+      type: plain.type,
+      fileUrl: plain.fileUrl,
+      fileName: plain.fileName,
+      fileSize: plain.fileSize,
+      mimeType: plain.mimeType,
+      thumbnailUrl: plain.thumbnailUrl,
+      duration: plain.duration,
+      isOneView: plain.isOneView,
+      viewedBy: normalizeObjectIdArray(plain.viewedBy),
+      viewedAt: plain.viewedAt ? plain.viewedAt.toISOString() : undefined,
+      viewCount: plain.viewCount,
+      replyTo: normalizeReply(plain.replyTo),
+      isEdited: plain.isEdited,
+      editedAt: plain.editedAt ? plain.editedAt.toISOString() : undefined,
+      isDeleted: plain.isDeleted,
+      deletedAt: plain.deletedAt ? plain.deletedAt.toISOString() : undefined,
+      deletedFor: normalizeObjectIdArray(plain.deletedFor),
+      isDeletedForEveryone: plain.isDeletedForEveryone,
+      stickerId: plain.stickerId,
+      stickerUrl: plain.stickerUrl,
+      stickerCategory: plain.stickerCategory,
+      voiceDuration: plain.voiceDuration,
+      voiceWaveform: plain.voiceWaveform ? [...plain.voiceWaveform] : undefined,
+      reactions: normalizeReactions(plain.reactions),
+      createdAt: message.createdAt.toISOString(),
+      updatedAt: message.updatedAt?.toISOString(),
+      encryptionKey: plain.encryptionKey,
+      isEncrypted: plain.isEncrypted,
+      expiresAt: plain.expiresAt ? plain.expiresAt.toISOString() : undefined,
+    };
+  });
+
+  const nextCursor =
+    hasMore && ordered.length
+      ? encodeMessageCursor({
+          createdAt: ordered[0].createdAt.toISOString(),
+          id: ordered[0].id,
+        })
+      : null;
 
   res.json({
-    success: true,
-    message: 'Messages retrieved successfully',
-    data: {
-      messages: messages.reverse(),
-      hasMore: messages.length === Number(limit)
-    }
+    messages: responseMessages,
+    nextCursor,
+    hasMore,
   });
 });
 
