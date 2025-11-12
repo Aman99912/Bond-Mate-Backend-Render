@@ -55,7 +55,7 @@ export const validateRegister = [
   body('dob')
     .optional()
     .isISO8601()
-    .withMessage('Date of birth must be a valid date'),
+    .withMessage('Date of birth must be a valid ISO 8601 date (e.g., 1990-05-15)'),
   handleValidationErrors,
 ];
 

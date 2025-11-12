@@ -21,7 +21,7 @@ app.use(helmet());
 
 // CORS configuration
 app.use(cors({
-  origin: true, // Allow all origins for development
+  origin: config.nodeEnv === 'development' ? true : config.cors.origin,
   credentials: true,
 }));
 
@@ -29,11 +29,23 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Routes where sensitive fields should be masked
+const sensitiveRoutes = ['/login', '/api/auth/login'];
+
 // Request logging middleware
 app.use((req, res, next) => {
-  logger.debug(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  const now = new Date().toISOString();
+  const body = { ...req.body }; // shallow copy
+
+  // Mask password only for sensitive routes in production
+  if (process.env.NODE_ENV === 'production' && sensitiveRoutes.includes(req.path)) {
+    if (body.password) body.password = '[FILTERED]';
+  }
+
+  logger.debug(`${now} - ${req.method} ${req.path}`);
   logger.debug('Origin:', req.get('Origin'));
-  logger.debug('Body:', req.body);
+  logger.debug('Body:', body);
+
   next();
 });
 
@@ -78,25 +90,50 @@ const startServer = async () => {
     server.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT}`);
       logger.info(`📊 Environment: ${config.nodeEnv}`);
-      logger.info(`🌐 CORS enabled for: ${config.cors.origin}`);
       logger.info('🔌 Socket.IO server initialized');
     }).on('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} is already in use. Please kill the process using this port or use a different port.`);
-        console.log('💡 To kill the process, run: netstat -ano | findstr :3000');
-        console.log('💡 Then run: taskkill /PID <PID_NUMBER> /F');
+        logger.error(`❌ Port ${PORT} is already in use. Please kill the process using this port or use a different port.`);
+        
+        logger.info('💡 To kill the process, run: netstat -ano | findstr :3000');
+        logger.info('💡 Then run: taskkill /PID <PID_NUMBER> /F');
         process.exit(1);
       } else {
-        console.error('Failed to start server:', err);
+        logger.error('Failed to start server:', err);
         process.exit(1);
       }
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 };
 
 startServer();
+
+process.on('SIGTERM', async () => {
+  try {
+    logger.info('🛑 Shutting down gracefulsly...');
+
+    // Stop accepting new connections and wait for existing ones to finish
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => {
+        if (err) return reject(err);
+        logger.info('HTTP server closed');
+        resolve();
+      });
+    });
+
+    // Stop background workers and cron jobs
+    await backgroundWorker.stop?.();
+    cronService.stopCronJobs?.();
+
+    logger.info('✅ Shutdown complete');
+    process.exit(0);
+  } catch (err) {
+    logger.error('❌ Error during shutdown:', err);
+    process.exit(1);
+  }
+});
 
 export default app;
