@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "bond-mate-collection-2024",
 		"name": "Bond Mate Backend API",
-		"description": "Postman collection for Bond Mate Backend API - Authentication, OTP, and User Management endpoints",
+		"description": "Complete Postman collection for Bond Mate Backend API including:\n- Authentication (Register, Login, Logout, Profile)\n- OTP Services (Mobile & Email)\n- Homepage/Dashboard\n- Chats & Messages\n- Notifications\n- Partner Requests\n- Location Sharing\n- Achievements\n- System Health Check",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "bond-mate-exporter"
 	},
@@ -55,7 +55,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"password123\",\n  \"mobileNumber\": \"+1234567890\",\n  \"subPassword\": \"subpass123\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"bio\": \"Love exploring new places with my partner 💕\",\n  \"dob\": \"1990-01-01\",\n  \"gender\": \"male\"\n}"
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"password123\",\n  \"mobileNumber\": \"1231231231\",\n  \"subPassword\": \"subpass123\",\n  \"avatar\": \"https://example.com/avatar.jpg\",\n  \"bio\": \"Love exploring new places with my partner 💕\",\n  \"dob\": \"1990-01-01\",\n  \"gender\": \"male\",\n  \"otpToken\": \"otp-token-from-verify-response\",\n  \"otpVerified\": true\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}{{apiPrefix}}/auth/register",
@@ -68,7 +68,7 @@
 								"register"
 							]
 						},
-						"description": "Register a new user account"
+						"description": "Register a new user account. Requires OTP verification first.\n\n**Prerequisites:**\n1. Send OTP to mobile number: POST /api/otp/send-mobile\n2. Verify OTP: POST /api/otp/verify-mobile (get token from response)\n3. Register with token: POST /api/auth/register\n\n**Body Parameters:**\n- `name` (required): User's full name\n- `email` (required): Email address\n- `password` (required): Password\n- `mobileNumber` (required): 10-digit mobile number (without +)\n- `subPassword` (required): Secret code/sub-password\n- `otpToken` (required): Token from OTP verification response\n- `otpVerified` (required): Must be true\n- `dob` (optional): Date of birth (YYYY-MM-DD)\n- `gender` (optional): Gender (male/female/other)\n- `bio` (optional): User bio\n- `avatar` (optional): Avatar URL"
 					},
 					"response": []
 				},
@@ -474,7 +474,7 @@
 								"send-mobile"
 							]
 						},
-						"description": "Send OTP to mobile number"
+						"description": "Send OTP to mobile number. Response includes a token that must be used for verification.\n\n**Response includes:**\n- `token`: OTP verification token (required for verify endpoint)\n- `mobileNumber`: Mobile number\n- `expiresIn`: OTP expiration time in seconds"
 					},
 					"response": []
 				},
@@ -490,7 +490,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"mobileNumber\": \"+1234567890\",\n  \"otp\": \"123456\"\n}"
+							"raw": "{\n  \"mobileNumber\": \"1231231231\",\n  \"otp\": \"1234\",\n  \"token\": \"otp-token-from-send-response\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}{{apiPrefix}}/otp/verify-mobile",
@@ -503,7 +503,7 @@
 								"verify-mobile"
 							]
 						},
-						"description": "Verify mobile OTP"
+						"description": "Verify mobile OTP. Requires token from send OTP response.\n\n**Body Parameters:**\n- `mobileNumber` (required): Mobile number\n- `otp` (required): 4-digit OTP code\n- `token` (required): Token received from send OTP response\n- `purpose` (optional): Purpose of OTP (verification, password_reset, etc.)\n\n**Note:** Token must match the token from the send OTP response."
 					},
 					"response": []
 				},
@@ -532,7 +532,7 @@
 								"resend-mobile"
 							]
 						},
-						"description": "Resend mobile OTP"
+						"description": "Resend mobile OTP. Returns a new token that must be used for verification."
 					},
 					"response": []
 				},
@@ -565,7 +565,7 @@
 								"send-email"
 							]
 						},
-						"description": "Send OTP to email address"
+						"description": "Send OTP to email address. Response includes a token that must be used for verification.\n\n**Response includes:**\n- `token`: OTP verification token (required for verify endpoint)\n- `email`: Email address\n- `expiresIn`: OTP expiration time in seconds"
 					},
 					"response": []
 				},
@@ -585,7 +585,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"john.doe@example.com\",\n  \"otp\": \"123456\",\n  \"purpose\": \"change_email\"\n}"
+							"raw": "{\n  \"email\": \"amansaroha110@gmail.com\",\n  \"otp\": \"8467\",\n  \"token\": \"otp-token-from-send-response\",\n  \"purpose\": \"change_email\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}{{apiPrefix}}/otp/verify-email",
@@ -598,7 +598,7 @@
 								"verify-email"
 							]
 						},
-						"description": "Verify email OTP"
+						"description": "Verify email OTP. Requires token from send OTP response.\n\n**Body Parameters:**\n- `email` (required): Email address\n- `otp` (required): 4-digit OTP code\n- `token` (required): Token received from send OTP response\n- `purpose` (optional): Purpose of OTP (change_email, verification, etc.)\n\n**Note:** If purpose is 'change_email', the email will be automatically updated after verification."
 					},
 					"response": []
 				}
@@ -896,6 +896,1184 @@
 							]
 						},
 						"description": "Check if there's an active breakup request"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Homepage (Dashboard)",
+			"item": [
+				{
+					"name": "Get Dashboard Data",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/dashboard/data",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"dashboard",
+								"data"
+							]
+						},
+						"description": "Get dashboard data including user info, current partner, partner requests, and notifications"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Quick Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/dashboard/stats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"dashboard",
+								"stats"
+							]
+						},
+						"description": "Get quick statistics for the user"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Chats",
+			"item": [
+				{
+					"name": "Get All Chats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/chats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"chats"
+							]
+						},
+						"description": "Get all chats for the authenticated user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current Partner Chat",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/current",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"current"
+							]
+						},
+						"description": "Get or create chat with current partner"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Chat by Partner ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/{{partnerId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								":partnerId"
+							],
+							"variable": [
+								{
+									"key": "partnerId",
+									"value": "partner-id-here"
+								}
+							]
+						},
+						"description": "Get or create chat with specific partner (legacy endpoint)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Chat Messages",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/{{chatId}}/messages?limit=20&cursor=",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								":chatId",
+								"messages"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "cursor",
+									"value": ""
+								}
+							],
+							"variable": [
+								{
+									"key": "chatId",
+									"value": "chat-id-here"
+								}
+							]
+						},
+						"description": "Get messages for a chat with cursor pagination"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"chatId\": \"chat-id-here\",\n  \"content\": \"Hello, how are you?\",\n  \"type\": \"text\",\n  \"replyTo\": null,\n  \"isOneView\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/send",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"send"
+							]
+						},
+						"description": "Send a message in a chat"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Message as Viewed",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/message/{{messageId}}/viewed",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"message",
+								":messageId",
+								"viewed"
+							],
+							"variable": [
+								{
+									"key": "messageId",
+									"value": "message-id-here"
+								}
+							]
+						},
+						"description": "Mark a message as viewed (for one-view messages)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Message View Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/message/{{messageId}}/view-status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"message",
+								":messageId",
+								"view-status"
+							],
+							"variable": [
+								{
+									"key": "messageId",
+									"value": "message-id-here"
+								}
+							]
+						},
+						"description": "Get view status of a message"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Message",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"Updated message content\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/message/{{messageId}}/edit",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"message",
+								":messageId",
+								"edit"
+							],
+							"variable": [
+								{
+									"key": "messageId",
+									"value": "message-id-here"
+								}
+							]
+						},
+						"description": "Edit a message"
+					},
+					"response": []
+				},
+				{
+					"name": "React to Message",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"emoji\": \"❤️\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/message/{{messageId}}/react",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"message",
+								":messageId",
+								"react"
+							],
+							"variable": [
+								{
+									"key": "messageId",
+									"value": "message-id-here"
+								}
+							]
+						},
+						"description": "Add or remove reaction to a message"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Message for Me",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/message/{{messageId}}/delete-for-me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"message",
+								":messageId",
+								"delete-for-me"
+							],
+							"variable": [
+								{
+									"key": "messageId",
+									"value": "message-id-here"
+								}
+							]
+						},
+						"description": "Delete a message for yourself only"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Message for Everyone",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/{{chatId}}/delete-for-everyone/{{messageId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								":chatId",
+								"delete-for-everyone",
+								":messageId"
+							],
+							"variable": [
+								{
+									"key": "chatId",
+									"value": "chat-id-here"
+								},
+								{
+									"key": "messageId",
+									"value": "message-id-here"
+								}
+							]
+						},
+						"description": "Delete a message for everyone (only sender can do this)"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload File",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "chatId",
+									"value": "chat-id-here",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "image",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/upload",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"upload"
+							]
+						},
+						"description": "Upload a file (image, video, audio, etc.) to a chat"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Voice Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "voice",
+									"type": "file",
+									"src": []
+								},
+								{
+									"key": "chatId",
+									"value": "chat-id-here",
+									"type": "text"
+								},
+								{
+									"key": "duration",
+									"value": "10",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/chat/upload-voice",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"chat",
+								"upload-voice"
+							]
+						},
+						"description": "Upload a voice message"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"item": [
+				{
+					"name": "Get Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/notifications?page=1&limit=20&unreadOnly=false",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"notifications"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "unreadOnly",
+									"value": "false"
+								}
+							]
+						},
+						"description": "Get user notifications with pagination"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Unread Count",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/notifications/unread-count",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"notifications",
+								"unread-count"
+							]
+						},
+						"description": "Get count of unread notifications"
+					},
+					"response": []
+				},
+				{
+					"name": "Register Notification Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"firebase-fcm-token-here\",\n  \"deviceId\": \"device-123\",\n  \"deviceName\": \"iPhone 13\",\n  \"platform\": \"ios\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/notifications/register-token",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"notifications",
+								"register-token"
+							]
+						},
+						"description": "Register FCM token for push notifications"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"toUserId\": \"user-id-to-send-notification\",\n  \"type\": \"message\",\n  \"title\": \"New Message\",\n  \"message\": \"You have a new message from your partner\",\n  \"data\": {\n    \"chatId\": \"chat-id-here\",\n    \"messageId\": \"message-id-here\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/notifications/send",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"notifications",
+								"send"
+							]
+						},
+						"description": "Send a notification to a user. Creates notification in database and sends push notification.\n\n**Body Parameters:**\n- `toUserId` (required): User ID to send notification to\n- `type` (required): Notification type (message, partner_request, partner_accepted, partner_rejected, file_shared, one_view_opened, partner_invitation)\n- `title` (required): Notification title\n- `message` (required): Notification message\n- `data` (optional): Additional data to include in notification\n\n**Example Types:**\n- `message`: New message notification\n- `partner_request`: Partner request sent\n- `partner_accepted`: Partner request accepted\n- `partner_rejected`: Partner request rejected\n- `file_shared`: File shared notification\n- `one_view_opened`: One-view message opened\n- `partner_invitation`: Partner invitation"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Notification as Read",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/notifications/{{notificationId}}/read",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"notifications",
+								":notificationId",
+								"read"
+							],
+							"variable": [
+								{
+									"key": "notificationId",
+									"value": "notification-id-here"
+								}
+							]
+						},
+						"description": "Mark a notification as read"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark All Notifications as Read",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/notifications/read-all",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"notifications",
+								"read-all"
+							]
+						},
+						"description": "Mark all notifications as read"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Notification",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/notifications/{{notificationId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"notifications",
+								":notificationId"
+							],
+							"variable": [
+								{
+									"key": "notificationId",
+									"value": "notification-id-here"
+								}
+							]
+						},
+						"description": "Delete a notification"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Request (Partner Requests)",
+			"item": [
+				{
+					"name": "Search Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/search?query=john",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"search"
+							],
+							"query": [
+								{
+									"key": "query",
+									"value": "john"
+								}
+							]
+						},
+						"description": "Search for users by name, email, or UserSearchId"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Partner Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"toUserId\": \"64f8a1b2c3d4e5f6a7b8c9d1\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/request",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"request"
+							]
+						},
+						"description": "Send a partner connection request to another user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Partner Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/requests",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"requests"
+							]
+						},
+						"description": "Get all partner requests (sent and received)"
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Partner Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/request/{{requestId}}/accept",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"request",
+								":requestId",
+								"accept"
+							],
+							"variable": [
+								{
+									"key": "requestId",
+									"value": "request-id-here"
+								}
+							]
+						},
+						"description": "Accept a partner request"
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Partner Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/request/{{requestId}}/reject",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"request",
+								":requestId",
+								"reject"
+							],
+							"variable": [
+								{
+									"key": "requestId",
+									"value": "request-id-here"
+								}
+							]
+						},
+						"description": "Reject a partner request"
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Partner Request",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/request/{{requestId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"request",
+								":requestId"
+							],
+							"variable": [
+								{
+									"key": "requestId",
+									"value": "request-id-here"
+								}
+							]
+						},
+						"description": "Cancel a sent partner request"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Breakup Request Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/breakup-status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"breakup-status"
+							]
+						},
+						"description": "Check if there's an active breakup request"
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Breakup Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/breakup/{{requestId}}/accept",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"breakup",
+								":requestId",
+								"accept"
+							],
+							"variable": [
+								{
+									"key": "requestId",
+									"value": "request-id-here"
+								}
+							]
+						},
+						"description": "Accept a breakup request"
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Breakup Request",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/partners/breakup/{{requestId}}/reject",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"partners",
+								"breakup",
+								":requestId",
+								"reject"
+							],
+							"variable": [
+								{
+									"key": "requestId",
+									"value": "request-id-here"
+								}
+							]
+						},
+						"description": "Reject a breakup request"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Location",
+			"item": [
+				{
+					"name": "Update Location",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090,\n  \"accuracy\": 10\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/location",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"location"
+							]
+						},
+						"description": "Update user's current location"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Partner Location",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/location/partner",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"location",
+								"partner"
+							]
+						},
+						"description": "Get partner's last known location"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Both Locations",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/location/both",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"location",
+								"both"
+							]
+						},
+						"description": "Get both user's and partner's locations"
+					},
+					"response": []
+				},
+				{
+					"name": "Request Partner Location",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/location/request",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"location",
+								"request"
+							]
+						},
+						"description": "Request partner's current location (sends real-time request via socket)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Achievement",
+			"item": [
+				{
+					"name": "Get Achievements Data",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}{{apiPrefix}}/achievements",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"{{apiPrefix}}",
+								"achievements"
+							]
+						},
+						"description": "Get all achievements data for the couple including:\n- User data (both users)\n- Couple statistics\n- Level information\n- Streak information\n- Achievements list\n- Badges list\n- Timeline events"
 					},
 					"response": []
 				}

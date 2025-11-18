@@ -5,7 +5,8 @@ import {
   markAsRead, 
   markAllAsRead, 
   deleteNotification,
-  registerNotificationToken
+  registerNotificationToken,
+  sendNotification
 } from '@/controllers/notificationController';
 import { authenticate } from '@/middleware/auth';
 
@@ -18,6 +19,7 @@ router.use(authenticate);
 router.get('/', getUserNotifications);
 router.get('/unread-count', getUnreadCount);
 router.post('/register-token', registerNotificationToken);
+router.post('/send', sendNotification); // Send notification endpoint
 router.put('/:notificationId/read', markAsRead);
 router.put('/read-all', markAllAsRead);
 router.delete('/:notificationId', deleteNotification);

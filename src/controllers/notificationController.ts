@@ -130,3 +130,50 @@ export const deleteNotification = asyncHandler(async (req: Request, res: Respons
     message: 'Notification deleted successfully'
   });
 });
+
+// Send notification (create and send push notification)
+export const sendNotification = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  const { toUserId, type, title, message, data } = req.body as {
+    toUserId: string;
+    type: 'message' | 'partner_request' | 'partner_accepted' | 'partner_rejected' | 'file_shared' | 'one_view_opened' | 'partner_invitation';
+    title: string;
+    message: string;
+    data?: Record<string, unknown>;
+  };
+
+  if (!userId) {
+    throw new AppError('Authentication required', 401);
+  }
+
+  if (!toUserId || !type || !title || !message) {
+    throw new AppError('toUserId, type, title, and message are required', 400);
+  }
+
+  // Create notification in database
+  const notification = await NotificationService.createNotification({
+    userId: toUserId,
+    type,
+    title,
+    message,
+    data: data || {}
+  });
+
+  // Send push notification
+  const notificationId = notification && typeof notification === 'object' && '_id' in notification 
+    ? String((notification as any)._id) 
+    : String(notification);
+    
+  await NotificationService.sendPushNotification(
+    toUserId,
+    title,
+    message,
+    { ...data, notificationId, type }
+  );
+
+  res.json({
+    success: true,
+    message: 'Notification sent successfully',
+    data: { notification }
+  });
+});

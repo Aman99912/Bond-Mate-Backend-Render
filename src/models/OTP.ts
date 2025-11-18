@@ -4,6 +4,7 @@ export interface IOTP extends Document {
   mobileNumber?: string;
   email?: string;
   otp: string;
+  token: string; // Token for OTP verification
   type: 'mobile' | 'email';
   purpose: 'verification' | 'change_email' | 'change_phone' | 'password_reset';
   expiresAt: Date;
@@ -30,6 +31,12 @@ const OTPSchema = new Schema<IOTP>({
     type: String,
     required: true,
     trim: true
+  },
+  token: {
+    type: String,
+    required: true,
+    trim: true,
+    index: true
   },
   type: {
     type: String,
@@ -58,5 +65,6 @@ const OTPSchema = new Schema<IOTP>({
 OTPSchema.index({ mobileNumber: 1, isUsed: 1 });
 OTPSchema.index({ email: 1, isUsed: 1 });
 OTPSchema.index({ type: 1, purpose: 1 });
+OTPSchema.index({ token: 1, isUsed: 1 });
 
 export default mongoose.model<IOTP>('OTP', OTPSchema);

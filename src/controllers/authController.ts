@@ -17,9 +17,28 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     avatar, 
     bio, 
     dob,
-    gender
+    gender,
+    otpToken,
+    otpVerified
+  }: RegisterRequest & { otpToken?: string; otpVerified?: boolean } = req.body;
 
-  }: RegisterRequest = req.body;
+  // Require OTP verification for registration
+  if (!otpToken || !otpVerified) {
+    throw new AppError('OTP verification required. Please verify your mobile number or email with OTP first.', 400);
+  }
+
+  // Verify OTP token was used (check if OTP record exists and was used)
+  const OTP = require('@/models/OTP').default;
+  const otpRecord = await OTP.findOne({
+    $or: [
+      ...(email ? [{ email, token: otpToken, isUsed: true }] : []),
+      ...(mobileNumber ? [{ mobileNumber, token: otpToken, isUsed: true }] : [])
+    ]
+  });
+
+  if (!otpRecord) {
+    throw new AppError('Invalid or unverified OTP token. Please verify your mobile number or email with OTP first.', 400);
+  }
 
   // Check if user already exists
   const existingUser = await User.findOne({

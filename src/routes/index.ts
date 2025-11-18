@@ -18,6 +18,7 @@ import profileRoutes from './profile';
 import nicknameRoutes from './nickname';
 import monitoringRoutes from './monitoring';
 import adminRoutes from './admin';
+import achievementsRoutes from './achievements';
 import { securityMiddleware, securityHeaders } from '@/middleware/security';
 
 const router = Router();
@@ -57,5 +58,6 @@ router.use('/profile', profileRoutes);
 router.use('/nicknames', nicknameRoutes);
 router.use('/monitoring', monitoringRoutes);
 router.use('/admin', adminRoutes);
+router.use('/achievements', achievementsRoutes);
 
 export default router;
