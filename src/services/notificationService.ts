@@ -112,7 +112,7 @@ class NotificationService {
     }
   }
 
-  // Send push notification via Expo
+  // Send push notification - Auto-detect token type (Expo or FCM) and use appropriate service
   public async sendPushNotification(userId: string, title: string, body: string, data?: any) {
     try {
       // Get user's push token from currentDeviceInfo (FCM token)
@@ -124,17 +124,17 @@ class NotificationService {
       }
       
       // Try to get token from currentDeviceInfo first (new location, from login)
-      let fcmToken = user.currentDeviceInfo?.fcmToken;
+      let token = user.currentDeviceInfo?.fcmToken;
       
       // Fallback to pushToken (old location) for backward compatibility
-      if (!fcmToken) {
-        fcmToken = user.pushToken;
-        if (fcmToken) {
+      if (!token) {
+        token = user.pushToken;
+        if (token) {
           console.log(`📱 Using pushToken (legacy) for user: ${userId}`);
         }
       }
       
-      if (!fcmToken) {
+      if (!token) {
         console.log(`❌ No push/FCM token found for user: ${userId}`);
         console.log('Debug info:', {
           hasCurrentDeviceInfo: !!user.currentDeviceInfo,
@@ -145,10 +145,28 @@ class NotificationService {
         return false;
       }
       
-      console.log(`📱 Sending push notification to user ${userId}, token: ${fcmToken.substring(0, 30)}...`);
+      // Detect token type: 
+      // - Expo tokens start with "ExponentPushToken[" or "ExpoPushToken"
+      // - FCM tokens are long strings (150+ chars) with colons, typically starting with alphanumeric
+      const isExpoToken = token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken');
+      // FCM tokens are typically 150+ characters, contain colons, and don't match Expo pattern
+      const isFCMToken = !isExpoToken && token.length > 100 && token.includes(':');
+      
+      console.log(`📱 Sending push notification to user ${userId}, token type: ${isExpoToken ? 'Expo' : isFCMToken ? 'FCM' : 'Unknown'}, token: ${token.substring(0, 30)}...`);
 
+      // Use Firebase Admin SDK for FCM tokens (default for non-Expo tokens)
+      if (isFCMToken || !isExpoToken) {
+        console.log(`🔥 Using Firebase Admin SDK for FCM token`);
+        return await this.sendFirebaseNotification(token, {
+          title,
+          body,
+          data: data || {}
+        });
+      }
+      
+      // Use Expo Push API for Expo tokens
       const message = {
-        to: fcmToken,
+        to: token,
         sound: 'default',
         title: title,
         body: body,

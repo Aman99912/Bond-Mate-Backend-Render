@@ -600,7 +600,7 @@ export const getCurrentPartner = asyncHandler(async (req: Request, res: Response
 
   // Get full partner details
   const partner = await User.findById(activePartner.partnerId)
-    .select('name email avatar dob gender bio UserSearchId');
+    .select('name email avatar dob gender bio UserSearchId createdAt');
 
   if (!partner) {
     res.json({
